@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -60,7 +61,7 @@ Usage:
   backscroll delete <id>         delete one entry
   backscroll redact <id|-N ...>  permanently mask secrets (tokens, keys,
                                  passwords) in stored entries; --dry-run
-                                 previews. show/export take --redact too
+                                 previews. show/search/export take --redact
   backscroll off | on            pause / resume recording (this session)
   backscroll doctor              check that everything is set up correctly
   backscroll version             print version
@@ -310,6 +311,7 @@ func cmdShow(args []string) error {
 func cmdSearch(args []string) error {
 	fs := flag.NewFlagSet("search", flag.ExitOnError)
 	n := fs.Int("n", 20, "max results")
+	doRedact := fs.Bool("redact", false, "mask secrets in displayed commands and snippets")
 	fs.Parse(args)
 	if fs.NArg() == 0 {
 		return fmt.Errorf("usage: backscroll search <query>")
@@ -330,11 +332,22 @@ func cmdSearch(args []string) error {
 		fmt.Println("no matches")
 		return nil
 	}
+	var extra []*regexp.Regexp
+	if *doRedact {
+		extra = redact.LoadExtra()
+	}
 	for _, c := range res {
+		cmd, snip := c.Cmd, strings.TrimSpace(c.Snippet)
+		if *doRedact {
+			cmd, _ = redact.String(cmd, extra)
+			// drop the FTS highlight escapes first: a secret split by
+			// them would otherwise slip past the redaction patterns
+			snip, _ = redact.String(string(ansi.Strip([]byte(snip))), extra)
+		}
 		fmt.Printf("\x1b[1m%5d\x1b[0m  %s  exit %s  \x1b[36m%s\x1b[0m\n",
-			c.ID, fmtAgo(c.StartedAt), exitStr(c), oneLine(c.Cmd, 70))
-		if s := strings.TrimSpace(c.Snippet); s != "" {
-			fmt.Printf("       %s\n", oneLine(s, 100))
+			c.ID, fmtAgo(c.StartedAt), exitStr(c), oneLine(cmd, 70))
+		if snip != "" {
+			fmt.Printf("       %s\n", oneLine(snip, 100))
 		}
 	}
 	fmt.Printf("\n(%d results — `backscroll show <id>` for full output)\n", len(res))

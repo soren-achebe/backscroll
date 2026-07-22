@@ -114,6 +114,26 @@ Or grab a static binary from [releases](https://github.com/soren-achebe/backscro
 | `backscroll off` / `on` | pause / resume recording in this session |
 | `backscroll doctor` | check that everything is wired up |
 
+## tmux / screen / SSH
+
+backscroll wraps a shell, so it composes with multiplexers naturally —
+just decide which side of tmux you want it on:
+
+- **Inside each pane (recommended):** use the `exec backscroll run` rc
+  snippet above (or set tmux's `default-command "backscroll run"`).
+  Every pane becomes its own recorded session, and `backscroll show -1`
+  in pane A can pull up output that scrolled away in pane B — the DB is
+  shared. The `$BACKSCROLL_ACTIVE` guard prevents double-recording if
+  you nest.
+- **Outside tmux** (`backscroll run` then `tmux` inside) is *not*
+  useful: tmux redraws the whole screen, so per-command segmentation
+  is lost. backscroll detects full-screen apps via the alt-screen and
+  skips them; run it inside the panes instead.
+- **Over SSH:** backscroll records on whichever machine the shell runs.
+  Install it on the remote host and add the rc snippet there; your
+  laptop's DB and the server's DB stay separate (cross-machine sync is
+  on the roadmap).
+
 ## vs. other tools
 
 | | records commands | records **outputs** | searchable | per-command structure |

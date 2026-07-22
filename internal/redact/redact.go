@@ -36,19 +36,19 @@ var rules = []rule{
 	{regexp.MustCompile(`(?i)(authorization["']?\s*[:=]\s*["']?(?:bearer|basic|token)\s+)[^\s"']+`), "${1}" + mask},
 
 	// Well-known token formats.
-	{regexp.MustCompile(`\b(?:AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}\b`), mask},                          // AWS access key id
-	{regexp.MustCompile(`\bgh[pousr]_[A-Za-z0-9]{20,255}\b`), mask},                                // GitHub tokens
-	{regexp.MustCompile(`\bgithub_pat_[A-Za-z0-9_]{20,255}\b`), mask},                              // GitHub fine-grained PAT
-	{regexp.MustCompile(`\bxox[baprs]-[A-Za-z0-9-]{10,255}\b`), mask},                              // Slack
-	{regexp.MustCompile(`\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{10,255}\b`), mask},               // Stripe
-	{regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{20,255}\b`), mask},                                     // OpenAI / Anthropic style
-	{regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{35}\b`), mask},                                        // Google API key
-	{regexp.MustCompile(`\bnpm_[A-Za-z0-9]{36}\b`), mask},                                          // npm
-	{regexp.MustCompile(`\bpypi-[A-Za-z0-9_-]{20,}\b`), mask},                                      // PyPI
-	{regexp.MustCompile(`\bglpat-[A-Za-z0-9_-]{20,255}\b`), mask},                                  // GitLab PAT
-	{regexp.MustCompile(`\bdop_v1_[a-f0-9]{64}\b`), mask},                                          // DigitalOcean
-	{regexp.MustCompile(`\bhf_[A-Za-z]{30,}\b`), mask},                                             // Hugging Face
-	{regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`), mask},   // JWT
+	{regexp.MustCompile(`\b(?:AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}\b`), mask},                        // AWS access key id
+	{regexp.MustCompile(`\bgh[pousr]_[A-Za-z0-9]{20,255}\b`), mask},                              // GitHub tokens
+	{regexp.MustCompile(`\bgithub_pat_[A-Za-z0-9_]{20,255}\b`), mask},                            // GitHub fine-grained PAT
+	{regexp.MustCompile(`\bxox[baprs]-[A-Za-z0-9-]{10,255}\b`), mask},                            // Slack
+	{regexp.MustCompile(`\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{10,255}\b`), mask},             // Stripe
+	{regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{20,255}\b`), mask},                                   // OpenAI / Anthropic style
+	{regexp.MustCompile(`\bAIza[0-9A-Za-z_-]{35}\b`), mask},                                      // Google API key
+	{regexp.MustCompile(`\bnpm_[A-Za-z0-9]{36}\b`), mask},                                        // npm
+	{regexp.MustCompile(`\bpypi-[A-Za-z0-9_-]{20,}\b`), mask},                                    // PyPI
+	{regexp.MustCompile(`\bglpat-[A-Za-z0-9_-]{20,255}\b`), mask},                                // GitLab PAT
+	{regexp.MustCompile(`\bdop_v1_[a-f0-9]{64}\b`), mask},                                        // DigitalOcean
+	{regexp.MustCompile(`\bhf_[A-Za-z]{30,}\b`), mask},                                           // Hugging Face
+	{regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`), mask}, // JWT
 
 	// Generic key=value / key: value assignments. Keeps the key, masks the
 	// value. Runs last so specific formats above win.
