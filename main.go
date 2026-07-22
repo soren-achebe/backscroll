@@ -50,6 +50,10 @@ Usage:
   backscroll diff <a> [b]        diff two stored outputs (ids or -N offsets);
                                  with one arg, diffs against the previous run
                                  of the same command ("what changed?")
+  backscroll export [id|-N ...]  share a command + its output:
+                                 --format md (default: paste into an issue),
+                                 cast (asciinema v2), json. --details folds
+                                 long md output; -o FILE writes to a file
   backscroll stats               database statistics
   backscroll prune --older 30d   delete old entries
   backscroll delete <id>         delete one entry
@@ -84,6 +88,8 @@ func main() {
 		err = cmdSearch(args)
 	case "diff":
 		err = cmdDiff(args)
+	case "export":
+		err = cmdExport(args)
 	case "stats":
 		err = cmdStats()
 	case "prune":

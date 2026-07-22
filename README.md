@@ -24,6 +24,8 @@ $ backscroll diff -1          # how does this run differ from the last
 @@ -12,1 +12,2 @@
 -Plan: 1 to add, 0 to change, 0 to destroy.
 +Plan: 3 to add, 1 to change, 0 to destroy.
+$ backscroll export -1 | wl-copy   # command + output as markdown → paste
+                                   # straight into the GitHub issue
 ```
 
 You know the moment: a command printed the answer you need — a token, an
@@ -102,6 +104,9 @@ Or grab a static binary from [releases](https://github.com/soren-achebe/backscro
 | `backscroll list -n 50` | recent commands with exit/duration/size |
 | `backscroll diff 3141` | what changed vs. the **previous run of the same command** |
 | `backscroll diff -2 -1` | unified diff of any two stored outputs (`-U n` context) |
+| `backscroll export -1` | command + output as a markdown block, ready to paste into an issue (`--details` folds it) |
+| `backscroll export 3141 --format cast` | asciicast v2 — replay with `asciinema play` |
+| `backscroll export -1 --format json` | structured record for scripting |
 | `backscroll stats` | how much is stored |
 | `backscroll prune --older 30d` | forget old entries |
 | `backscroll delete <id>` | forget one entry (that `curl -H "Authorization: ..."`) |
