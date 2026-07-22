@@ -91,7 +91,7 @@ func TestSearch(t *testing.T) {
 	add(t, st, sess, "curl svc", "connection refused by host\n", 7, now.Add(-2*time.Minute))
 	add(t, st, sess, "make build", "all targets up to date\n", 0, now.Add(-time.Minute))
 
-	res, err := st.Search(`"connection refused"`, 10)
+	res, err := st.Search(`"connection refused"`, Filter{Limit: 10})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestSearch(t *testing.T) {
 		t.Error("Search returned empty snippet")
 	}
 
-	res, err = st.Search(`"no such phrase anywhere"`, 10)
+	res, err = st.Search(`"no such phrase anywhere"`, Filter{Limit: 10})
 	if err != nil {
 		t.Fatalf("Search(miss): %v", err)
 	}
@@ -144,10 +144,10 @@ func TestUpdateOutputAndFTS(t *testing.T) {
 	if string(c.Output) != "secret sauce [REDACTED]\n" {
 		t.Errorf("output after update = %q", c.Output)
 	}
-	if res, _ := st.Search(`"ABC123"`, 10); len(res) != 0 {
+	if res, _ := st.Search(`"ABC123"`, Filter{Limit: 10}); len(res) != 0 {
 		t.Errorf("old text still findable in FTS after UpdateOutput: %+v", res)
 	}
-	if res, _ := st.Search(`"REDACTED"`, 10); len(res) != 1 {
+	if res, _ := st.Search(`"REDACTED"`, Filter{Limit: 10}); len(res) != 1 {
 		t.Errorf("new text not findable in FTS after UpdateOutput")
 	}
 }
@@ -165,7 +165,7 @@ func TestPruneAndDelete(t *testing.T) {
 	if n != 1 {
 		t.Errorf("Prune removed %d, want 1", n)
 	}
-	if res, _ := st.Search(`"old out"`, 10); len(res) != 0 {
+	if res, _ := st.Search(`"old out"`, Filter{Limit: 10}); len(res) != 0 {
 		t.Error("pruned entry still in FTS")
 	}
 	if _, err := st.Get(2); err != nil {
@@ -178,7 +178,7 @@ func TestPruneAndDelete(t *testing.T) {
 	if _, err := st.Get(2); err == nil {
 		t.Error("Get(2) after Delete: want error")
 	}
-	if res, _ := st.Search(`"new out"`, 10); len(res) != 0 {
+	if res, _ := st.Search(`"new out"`, Filter{Limit: 10}); len(res) != 0 {
 		t.Error("deleted entry still in FTS")
 	}
 }
@@ -194,5 +194,67 @@ func TestStats(t *testing.T) {
 	}
 	if s.Commands != 2 || s.Sessions != 1 {
 		t.Errorf("Stats = %+v, want 2 commands / 1 session", s)
+	}
+}
+
+func TestListFilters(t *testing.T) {
+	st := testStore(t)
+	s1, _ := st.NewSession("bash", "xterm")
+	s2, _ := st.NewSession("zsh", "xterm")
+	old := time.Now().Add(-48 * time.Hour)
+	now := time.Now()
+	addAt := func(sess int64, cmd, cwd string, exit int, at time.Time) {
+		t.Helper()
+		if err := st.AddCommand(sess, cmd, cwd, exit, true, at, at.Add(time.Second),
+			[]byte(cmd+" out\n"), false, cmd+" out\n"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	addAt(s1, "make", "/src/app", 2, old)          // 1: old, failed, /src/app
+	addAt(s1, "ls", "/src/app/sub", 0, now)        // 2: /src/app/sub
+	addAt(s2, "go test", "/src/apple", 1, now)     // 3: sibling dir w/ prefix overlap
+	addAt(s2, "true", "/src/app", 0, now)          // 4
+
+	ids := func(cmds []Command) []int64 {
+		var out []int64
+		for _, c := range cmds {
+			out = append(out, c.ID)
+		}
+		return out
+	}
+	want := func(name string, f Filter, exp ...int64) {
+		t.Helper()
+		got, err := st.List(f)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		g := ids(got)
+		if len(g) != len(exp) {
+			t.Fatalf("%s: got ids %v, want %v", name, g, exp)
+		}
+		for i := range exp {
+			if g[i] != exp[i] {
+				t.Fatalf("%s: got ids %v, want %v", name, g, exp)
+			}
+		}
+	}
+
+	want("session", Filter{Session: s2}, 4, 3)
+	// cwd matches dir and subdirs, but NOT /src/apple (prefix overlap)
+	want("cwd", Filter{Cwd: "/src/app"}, 4, 2, 1)
+	want("failed", Filter{Failed: true}, 3, 1)
+	want("exit=2", Filter{Exit: 2, ExitSet: true}, 1)
+	want("exit=0", Filter{ExitSet: true}, 4, 2)
+	want("since", Filter{Since: time.Now().Add(-time.Hour)}, 4, 3, 2)
+	want("combo", Filter{Cwd: "/src/app", Failed: true}, 1)
+	want("limit", Filter{Limit: 2}, 4, 3)
+
+	// same filters through Search
+	res, err := st.Search(`"out"`, Filter{Cwd: "/src/app", Failed: true, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res) != 1 || res[0].ID != 1 {
+		t.Fatalf("search+filter: got %v", ids(res))
 	}
 }

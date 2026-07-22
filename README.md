@@ -102,6 +102,8 @@ Or grab a static binary from [releases](https://github.com/soren-achebe/backscro
 | `backscroll show 3141` | by id · `--raw` keeps colors |
 | `backscroll search <text>` | full-text search commands + outputs |
 | `backscroll list -n 50` | recent commands with exit/duration/size |
+| `... --exit fail --since 2h` | list/search filters: failures only, last 2 hours |
+| `... --cwd .` | only commands run in this directory (or beneath it) |
 | `backscroll diff 3141` | what changed vs. the **previous run of the same command** |
 | `backscroll diff -2 -1` | unified diff of any two stored outputs (`-U n` context) |
 | `backscroll export -1` | command + output as a markdown block, ready to paste into an issue (`--details` folds it) |

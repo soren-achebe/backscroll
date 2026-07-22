@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/klauspost/compress/zstd"
@@ -148,15 +149,62 @@ func scanCmd(rows *sql.Rows) (Command, error) {
 
 const cmdCols = `id, session_id, cmd, coalesce(cwd,''), exit_code, started_at, ended_at, output_bytes, truncated`
 
-func (s *Store) List(limit int, session int64) ([]Command, error) {
-	q := `SELECT ` + cmdCols + ` FROM commands`
+// Filter narrows List/Search results. Zero values mean "no filter".
+type Filter struct {
+	Session int64     // >0: only this session
+	Cwd     string    // non-empty: this directory or any directory beneath it
+	Exit    int64     // with ExitSet: only this exit code
+	ExitSet bool      // Exit is meaningful (allows filtering on 0)
+	Failed  bool      // only nonzero exit codes
+	Since   time.Time // non-zero: only commands started at/after this time
+	Limit   int       // <=0: default 20
+}
+
+// where builds the WHERE clause (with leading " WHERE" or empty) and args
+// for the filter, prefixing column names with tbl (e.g. "c.").
+func (f Filter) where(tbl string) (string, []any) {
+	var conds []string
 	var args []any
-	if session > 0 {
-		q += ` WHERE session_id=?`
-		args = append(args, session)
+	if f.Session > 0 {
+		conds = append(conds, tbl+`session_id=?`)
+		args = append(args, f.Session)
 	}
-	q += ` ORDER BY id DESC LIMIT ?`
-	args = append(args, limit)
+	if f.Cwd != "" {
+		conds = append(conds, `(`+tbl+`cwd=? OR `+tbl+`cwd LIKE ? ESCAPE '\')`)
+		args = append(args, f.Cwd, likeEscape(f.Cwd)+`/%`)
+	}
+	if f.ExitSet {
+		conds = append(conds, tbl+`exit_code=?`)
+		args = append(args, f.Exit)
+	} else if f.Failed {
+		conds = append(conds, tbl+`exit_code IS NOT NULL AND `+tbl+`exit_code<>0`)
+	}
+	if !f.Since.IsZero() {
+		conds = append(conds, tbl+`started_at>=?`)
+		args = append(args, f.Since.UnixMilli())
+	}
+	if len(conds) == 0 {
+		return "", nil
+	}
+	return " WHERE " + strings.Join(conds, " AND "), args
+}
+
+func likeEscape(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(s)
+}
+
+func (f Filter) limit() int {
+	if f.Limit <= 0 {
+		return 20
+	}
+	return f.Limit
+}
+
+func (s *Store) List(f Filter) ([]Command, error) {
+	where, args := f.where("")
+	q := `SELECT ` + cmdCols + ` FROM commands` + where + ` ORDER BY id DESC LIMIT ?`
+	args = append(args, f.limit())
 	rows, err := s.db.Query(q, args...)
 	if err != nil {
 		return nil, err
@@ -212,14 +260,21 @@ func (s *Store) Get(n int64) (*Command, error) {
 	return &c, nil
 }
 
-func (s *Store) Search(query string, limit int) ([]Command, error) {
+func (s *Store) Search(query string, f Filter) ([]Command, error) {
+	where, fargs := f.where("c.")
+	extra := ""
+	if where != "" {
+		extra = " AND " + strings.TrimPrefix(where, " WHERE ")
+	}
+	args := append([]any{query}, fargs...)
+	args = append(args, f.limit())
 	rows, err := s.db.Query(`
 		SELECT c.id, c.session_id, c.cmd, coalesce(c.cwd,''), c.exit_code, c.started_at, c.ended_at,
 		       c.output_bytes, c.truncated,
 		       snippet(commands_fts, 1, char(27)||'[1;31m', char(27)||'[0m', '…', 12)
 		FROM commands_fts JOIN commands c ON c.id = commands_fts.rowid
-		WHERE commands_fts MATCH ?
-		ORDER BY c.id DESC LIMIT ?`, query, limit)
+		WHERE commands_fts MATCH ?`+extra+`
+		ORDER BY c.id DESC LIMIT ?`, args...)
 	if err != nil {
 		return nil, err
 	}

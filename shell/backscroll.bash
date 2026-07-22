@@ -46,6 +46,15 @@ _backscroll_complete() {
     COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "export" ] && { [ "$prev" = "--format" ] || [ "$prev" = "-format" ]; }; then
     COMPREPLY=($(compgen -W "md cast json" -- "$cur"))
+  elif [ "${COMP_WORDS[1]}" = "list" ] || [ "${COMP_WORDS[1]}" = "last" ] || [ "${COMP_WORDS[1]}" = "search" ]; then
+    case "$prev" in
+      --exit|-exit) COMPREPLY=($(compgen -W "fail 0 1 2" -- "$cur")) ;;
+      --cwd|-cwd)   COMPREPLY=($(compgen -d -- "$cur")) ;;
+      --since|-since|--session|-session|-n) ;;
+      *) case "$cur" in
+           -*) COMPREPLY=($(compgen -W "-n --session --cwd --exit --since" -- "$cur")) ;;
+         esac ;;
+    esac
   fi
 }
 complete -F _backscroll_complete backscroll

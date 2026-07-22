@@ -31,6 +31,14 @@ if (( $+functions[compdef] )); then
       compadd bash zsh fish
     elif [[ $words[2] == export && $words[CURRENT-1] == (--format|-format) ]]; then
       compadd md cast json
+    elif [[ $words[2] == (list|last|search) ]]; then
+      if [[ $words[CURRENT-1] == (--exit|-exit) ]]; then
+        compadd fail 0 1 2
+      elif [[ $words[CURRENT-1] == (--cwd|-cwd) ]]; then
+        _files -/
+      elif [[ $words[CURRENT] == -* ]]; then
+        compadd -- -n --session --cwd --exit --since
+      fi
     fi
   }
   compdef _backscroll backscroll

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -44,11 +45,14 @@ Usage:
   backscroll init <bash|zsh|fish> print shell-integration snippet
                                  (add: eval "$(backscroll init zsh)" to rc;
                                   fish: backscroll init fish | source)
-  backscroll list [-n N]         recent commands
+  backscroll list [-n N]         recent commands; filter with --cwd DIR,
+                                 --exit CODE|fail, --since 2h|3d|1w|DATE,
+                                 --session ID
   backscroll show [id | -N]      full stored output (default: last command)
                                  -2 = one before last, etc.  --raw keeps colors
   backscroll last [-n N]         alias for list
   backscroll search <query>      full-text search over commands + outputs
+                                 (same filters as list: --cwd --exit --since)
   backscroll diff <a> [b]        diff two stored outputs (ids or -N offsets);
                                  with one arg, diffs against the previous run
                                  of the same command ("what changed?")
@@ -192,22 +196,95 @@ func exitStr(c store.Command) string {
 	return strconv.FormatInt(c.ExitCode.Int64, 10)
 }
 
+// filterFlags registers the shared list/search filter flags on fs and
+// returns a func that builds the store.Filter after fs.Parse.
+func filterFlags(fs *flag.FlagSet) func(limit int) (store.Filter, error) {
+	sess := fs.Int64("session", 0, "only this session id")
+	cwd := fs.String("cwd", "", "only commands run in `dir` (or beneath it); \".\" = current dir")
+	exit := fs.String("exit", "", "only exit `code` (number, or \"fail\" for any nonzero)")
+	since := fs.String("since", "", "only commands newer than `t` (30m, 2h, 3d, 1w, or 2006-01-02[ 15:04])")
+	return func(limit int) (store.Filter, error) {
+		f := store.Filter{Session: *sess, Limit: limit}
+		if *cwd != "" {
+			abs, err := filepath.Abs(*cwd)
+			if err != nil {
+				return f, err
+			}
+			f.Cwd = filepath.Clean(abs)
+		}
+		switch {
+		case *exit == "":
+		case *exit == "fail" || *exit == "nonzero":
+			f.Failed = true
+		default:
+			n, err := strconv.ParseInt(*exit, 10, 64)
+			if err != nil {
+				return f, fmt.Errorf("--exit: want a number or \"fail\", got %q", *exit)
+			}
+			f.Exit, f.ExitSet = n, true
+		}
+		if *since != "" {
+			t, err := parseSince(*since)
+			if err != nil {
+				return f, err
+			}
+			f.Since = t
+		}
+		return f, nil
+	}
+}
+
+// parseSince accepts a relative age (30m, 2h, 3d, 1w — d/w extend Go
+// durations) or an absolute local date/time (2006-01-02, 2006-01-02 15:04).
+func parseSince(s string) (time.Time, error) {
+	for _, layout := range []string{"2006-01-02 15:04", "2006-01-02T15:04", "2006-01-02"} {
+		if t, err := time.ParseInLocation(layout, s, time.Local); err == nil {
+			return t, nil
+		}
+	}
+	ds := s
+	if n := len(s); n > 1 {
+		switch s[n-1] {
+		case 'd':
+			if v, err := strconv.ParseFloat(s[:n-1], 64); err == nil {
+				return time.Now().Add(-time.Duration(v * 24 * float64(time.Hour))), nil
+			}
+		case 'w':
+			if v, err := strconv.ParseFloat(s[:n-1], 64); err == nil {
+				return time.Now().Add(-time.Duration(v * 7 * 24 * float64(time.Hour))), nil
+			}
+		}
+	}
+	if d, err := time.ParseDuration(ds); err == nil {
+		return time.Now().Add(-d), nil
+	}
+	return time.Time{}, fmt.Errorf("--since: want 30m, 2h, 3d, 1w or 2006-01-02[ 15:04], got %q", s)
+}
+
 func cmdList(args []string) error {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 	n := fs.Int("n", 20, "number of entries")
-	sess := fs.Int64("session", 0, "filter by session id")
+	mkFilter := filterFlags(fs)
 	fs.Parse(args)
 	st, err := openStore()
 	if err != nil {
 		return err
 	}
 	defer st.Close()
-	cmds, err := st.List(*n, *sess)
+	f, err := mkFilter(*n)
+	if err != nil {
+		return err
+	}
+	cmds, err := st.List(f)
 	if err != nil {
 		return err
 	}
 	if len(cmds) == 0 {
-		fmt.Println("no recorded commands yet — start a session with: backscroll run")
+		if f.Session > 0 || f.Cwd != "" || f.ExitSet || f.Failed || !f.Since.IsZero() {
+			fmt.Println("no commands match those filters")
+		} else {
+			fmt.Println("no recorded commands yet — start a session with: backscroll run")
+		}
 		return nil
 	}
 	color := term.IsTerminal(int(os.Stdout.Fd()))
@@ -312,9 +389,10 @@ func cmdSearch(args []string) error {
 	fs := flag.NewFlagSet("search", flag.ExitOnError)
 	n := fs.Int("n", 20, "max results")
 	doRedact := fs.Bool("redact", false, "mask secrets in displayed commands and snippets")
+	mkFilter := filterFlags(fs)
 	fs.Parse(args)
 	if fs.NArg() == 0 {
-		return fmt.Errorf("usage: backscroll search <query>")
+		return fmt.Errorf("usage: backscroll search [flags] <query>")
 	}
 	query := strings.Join(fs.Args(), " ")
 	// trigram tokenizer: quote the query so users can type natural strings
@@ -324,7 +402,11 @@ func cmdSearch(args []string) error {
 		return err
 	}
 	defer st.Close()
-	res, err := st.Search(q, *n)
+	f, err := mkFilter(*n)
+	if err != nil {
+		return err
+	}
+	res, err := st.Search(q, f)
 	if err != nil {
 		return err
 	}
