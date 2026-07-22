@@ -35,3 +35,17 @@ if [[ -n "$BACKSCROLL_ACTIVE" && -z "$BACKSCROLL_HOOKED" ]]; then
   trap '__bks_preexec' DEBUG
   PROMPT_COMMAND="__bks_precmd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
 fi
+
+# Tab completion (active in and out of recorded sessions).
+_backscroll_complete() {
+  local cur=${COMP_WORDS[COMP_CWORD]}
+  local prev=${COMP_WORDS[COMP_CWORD-1]:-}
+  if [ "$COMP_CWORD" -eq 1 ]; then
+    COMPREPLY=($(compgen -W "run init list last show search diff export stats prune delete off on doctor version help" -- "$cur"))
+  elif [ "${COMP_WORDS[1]}" = "init" ]; then
+    COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
+  elif [ "${COMP_WORDS[1]}" = "export" ] && { [ "$prev" = "--format" ] || [ "$prev" = "-format" ]; }; then
+    COMPREPLY=($(compgen -W "md cast json" -- "$cur"))
+  fi
+}
+complete -F _backscroll_complete backscroll

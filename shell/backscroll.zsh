@@ -21,3 +21,17 @@ if [[ -n "$BACKSCROLL_ACTIVE" && -z "$BACKSCROLL_HOOKED" ]]; then
   add-zsh-hook preexec __bks_preexec
   add-zsh-hook precmd  __bks_precmd
 fi
+
+# Tab completion (active in and out of recorded sessions).
+if (( $+functions[compdef] )); then
+  _backscroll() {
+    if (( CURRENT == 2 )); then
+      compadd run init list last show search diff export stats prune delete off on doctor version help
+    elif [[ $words[2] == init ]]; then
+      compadd bash zsh fish
+    elif [[ $words[2] == export && $words[CURRENT-1] == (--format|-format) ]]; then
+      compadd md cast json
+    fi
+  }
+  compdef _backscroll backscroll
+fi
