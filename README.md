@@ -202,7 +202,7 @@ responsibility. backscroll is local-only by design. Still:
 Early but working: bash, zsh, and fish on Linux and macOS, with
 ignore-patterns, session pause (`off`/`on`), output diffing, and a `doctor` command.
 On the roadmap: cross-machine sync, tmux integration —
-issues and PRs welcome.
+issues and PRs welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
