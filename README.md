@@ -68,6 +68,8 @@ Or grab a static binary from [releases](https://github.com/soren-achebe/backscro
    eval "$(backscroll init zsh)"
    # ~/.bashrc
    eval "$(backscroll init bash)"
+   # ~/.config/fish/config.fish
+   backscroll init fish | source
    ```
 
 2. Start a recorded shell:
@@ -95,6 +97,8 @@ Or grab a static binary from [releases](https://github.com/soren-achebe/backscro
 | `backscroll stats` | how much is stored |
 | `backscroll prune --older 30d` | forget old entries |
 | `backscroll delete <id>` | forget one entry (that `curl -H "Authorization: ..."`) |
+| `backscroll off` / `on` | pause / resume recording in this session |
+| `backscroll doctor` | check that everything is wired up |
 
 ## vs. other tools
 
@@ -110,6 +114,17 @@ Or grab a static binary from [releases](https://github.com/soren-achebe/backscro
 Recording everything your terminal prints is the point — and a
 responsibility. backscroll is local-only by design. Still:
 
+- **Ignore patterns**: put one Go regexp per line in
+  `~/.config/backscroll/ignore` and matching commands are never stored:
+
+  ```
+  ^vault
+  ^op\b
+  password|token|secret
+  ```
+
+- `backscroll off` pauses recording for the session (`backscroll on`
+  resumes) — for that quick credential dance.
 - `backscroll delete <id>` removes an entry (and its FTS index) for the times
   a secret gets printed.
 - `backscroll prune --older 30d` keeps a rolling window.
@@ -119,9 +134,10 @@ responsibility. backscroll is local-only by design. Still:
 
 ## Status
 
-Early but working: bash and zsh, Linux and macOS. Fish, ignore-patterns,
-`backscroll off/on`, and cross-machine sync are on the roadmap — issues and
-PRs welcome.
+Early but working: bash, zsh, and fish on Linux and macOS, with
+ignore-patterns, session pause (`off`/`on`), and a `doctor` command.
+On the roadmap: cross-machine sync, tmux integration, output diffing —
+issues and PRs welcome.
 
 ## License
 

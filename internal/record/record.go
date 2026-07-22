@@ -130,9 +130,16 @@ func Run(st *store.Store, headCap, tailCap int) error {
 		buf       *capBuf
 		startedAt time.Time
 		recorded  int
+		paused    bool
 	)
+	ignorePats := LoadIgnore()
 	flush := func(exitCode int, hasExit bool) {
 		if buf == nil {
+			return
+		}
+		if paused || Ignored(ignorePats, curCmd) {
+			buf = nil
+			curCmd = ""
 			return
 		}
 		raw := buf.Bytes()
@@ -163,6 +170,7 @@ func Run(st *store.Store, headCap, tailCap int) error {
 			}
 		},
 		OutEnd: flush,
+		Toggle: func(on bool) { paused = !on },
 	})
 
 	rbuf := make([]byte, 32*1024)

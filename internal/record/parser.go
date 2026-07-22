@@ -16,6 +16,7 @@ type Events struct {
 	OutEnd   func(exitCode int, ok bool) // OSC 133;D[;code]
 	Cwd      func(path string)           // OSC 7;file://host/path
 	Output   func(b []byte)              // raw output bytes between C and D (alt-screen excluded)
+	Toggle   func(on bool)               // OSC 6973;rec=on|off — pause/resume recording
 }
 
 type pstate int
@@ -170,6 +171,10 @@ func (p *Parser) handleOSC(payload string, out *[]byte) {
 			if p.ev.CmdText != nil {
 				p.ev.CmdText(string(raw))
 			}
+		}
+	case payload == "6973;rec=off" || payload == "6973;rec=on":
+		if p.ev.Toggle != nil {
+			p.ev.Toggle(strings.HasSuffix(payload, "=on"))
 		}
 	case strings.HasPrefix(payload, "7;"):
 		if p.ev.Cwd != nil {

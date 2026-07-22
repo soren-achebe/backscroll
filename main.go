@@ -31,12 +31,16 @@ var zshInit string
 //go:embed shell/backscroll.bash
 var bashInit string
 
+//go:embed shell/backscroll.fish
+var fishInit string
+
 const usage = `backscroll — never lose a command's output again
 
 Usage:
   backscroll run                 start a recorded shell session
-  backscroll init <bash|zsh>     print shell-integration snippet
-                                 (add: eval "$(backscroll init zsh)" to rc)
+  backscroll init <bash|zsh|fish> print shell-integration snippet
+                                 (add: eval "$(backscroll init zsh)" to rc;
+                                  fish: backscroll init fish | source)
   backscroll list [-n N]         recent commands
   backscroll show [id | -N]      full stored output (default: last command)
                                  -2 = one before last, etc.  --raw keeps colors
@@ -45,7 +49,12 @@ Usage:
   backscroll stats               database statistics
   backscroll prune --older 30d   delete old entries
   backscroll delete <id>         delete one entry
+  backscroll off | on            pause / resume recording (this session)
+  backscroll doctor              check that everything is set up correctly
   backscroll version             print version
+
+Ignore patterns: one Go regexp per line in ~/.config/backscroll/ignore —
+matching commands are never stored (see 'backscroll doctor' for the path).
 
 Data lives in ~/.local/share/backscroll/backscroll.db (override: $BACKSCROLL_DB).
 Everything is local; nothing ever leaves your machine.
@@ -75,6 +84,10 @@ func main() {
 		err = cmdPrune(args)
 	case "delete":
 		err = cmdDelete(args)
+	case "off", "on":
+		err = cmdToggle(cmd)
+	case "doctor":
+		err = cmdDoctor()
 	case "version", "--version", "-v":
 		fmt.Println("backscroll", version)
 	case "help", "--help", "-h":
@@ -119,8 +132,10 @@ func cmdInit(args []string) error {
 		fmt.Print(zshInit)
 	case "bash":
 		fmt.Print(bashInit)
+	case "fish":
+		fmt.Print(fishInit)
 	default:
-		return fmt.Errorf("unsupported shell %q (bash and zsh for now)", args[0])
+		return fmt.Errorf("unsupported shell %q (bash, zsh, fish)", args[0])
 	}
 	return nil
 }
@@ -216,19 +231,23 @@ func cmdShow(args []string) error {
 	fs := flag.NewFlagSet("show", flag.ExitOnError)
 	raw := fs.Bool("raw", false, "keep ANSI colors / control sequences")
 	quiet := fs.Bool("q", false, "output only, no header")
-	// allow "show -2" style: rewrite bare -N to N before flag parsing
+	// allow "show -2" style (bare -N = Nth from last) and flags in any
+	// position ("show 5 -q"): split flags from positionals ourselves.
+	// All show flags are booleans, so this is safe.
 	var target int64 = -1
-	rest := make([]string, 0, len(args))
+	var flags, pos []string
 	for _, a := range args {
 		if len(a) > 1 && a[0] == '-' {
 			if n, err := strconv.ParseInt(a, 10, 64); err == nil {
 				target = n
 				continue
 			}
+			flags = append(flags, a)
+			continue
 		}
-		rest = append(rest, a)
+		pos = append(pos, a)
 	}
-	fs.Parse(rest)
+	fs.Parse(append(flags, pos...))
 	if fs.NArg() > 0 {
 		n, err := strconv.ParseInt(fs.Arg(0), 10, 64)
 		if err != nil {
@@ -366,5 +385,104 @@ func cmdDelete(args []string) error {
 		return err
 	}
 	fmt.Printf("deleted entry %d\n", id)
+	return nil
+}
+
+func cmdToggle(which string) error {
+	if os.Getenv("BACKSCROLL_ACTIVE") == "" {
+		return fmt.Errorf("not inside a backscroll session (start one with: backscroll run)")
+	}
+	// The recorder watches the PTY stream, so an in-band private OSC
+	// sequence is all it takes — no sockets, no signals.
+	fmt.Printf("\x1b]6973;rec=%s\x07", which)
+	if which == "off" {
+		fmt.Println("backscroll: recording paused for this session (resume: backscroll on)")
+	} else {
+		fmt.Println("backscroll: recording resumed")
+	}
+	return nil
+}
+
+func rcFor(shell string) (rc string, hook string) {
+	home, _ := os.UserHomeDir()
+	switch {
+	case strings.Contains(shell, "zsh"):
+		return home + "/.zshrc", `eval "$(backscroll init zsh)"`
+	case strings.Contains(shell, "fish"):
+		return home + "/.config/fish/config.fish", `backscroll init fish | source`
+	default:
+		return home + "/.bashrc", `eval "$(backscroll init bash)"`
+	}
+}
+
+func cmdDoctor() error {
+	ok := func(b bool) string {
+		if b {
+			return "\x1b[32m✓\x1b[0m"
+		}
+		return "\x1b[31m✗\x1b[0m"
+	}
+	fmt.Println("backscroll doctor")
+	fmt.Println("─────────────────")
+	fmt.Printf("version            : %s\n", version)
+
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/bash"
+	}
+	fmt.Printf("shell              : %s\n", shell)
+
+	inSession := os.Getenv("BACKSCROLL_ACTIVE") != ""
+	fmt.Printf("%s inside a backscroll session", ok(inSession))
+	if !inSession {
+		fmt.Print("  → start one: backscroll run")
+	}
+	fmt.Println()
+
+	hooked := os.Getenv("BACKSCROLL_HOOKED") != ""
+	rc, hookLine := rcFor(shell)
+	rcHasHook := false
+	if b, err := os.ReadFile(rc); err == nil {
+		rcHasHook = strings.Contains(string(b), "backscroll init")
+	}
+	if inSession {
+		fmt.Printf("%s shell integration active in this session\n", ok(hooked))
+	}
+	fmt.Printf("%s rc file references backscroll (%s)", ok(rcHasHook), rc)
+	if !rcHasHook {
+		fmt.Printf("\n    → add:  %s", hookLine)
+	}
+	fmt.Println()
+
+	st, err := openStore()
+	fmt.Printf("%s database opens (%s)", ok(err == nil), store.DefaultPath())
+	if err != nil {
+		fmt.Printf("  → %v\n", err)
+		return nil
+	}
+	fmt.Println()
+	defer st.Close()
+	s, serr := st.Stats()
+	fmt.Printf("%s database queries work", ok(serr == nil))
+	if serr == nil {
+		fmt.Printf("  (%d commands, %d sessions, db %s)", s.Commands, s.Sessions, humanBytes(s.DBBytes))
+	} else {
+		fmt.Printf("  → %v", serr)
+	}
+	fmt.Println()
+
+	ig := record.IgnoreFile()
+	if _, err := os.Stat(ig); err == nil {
+		n := len(record.LoadIgnore())
+		fmt.Printf("· ignore patterns   : %d active (%s)\n", n, ig)
+	} else {
+		fmt.Printf("· ignore patterns   : none (create %s — one Go regexp per line)\n", ig)
+	}
+
+	if inSession && hooked && err == nil && serr == nil {
+		fmt.Println("\nall good — your commands are being recorded.")
+	} else if !inSession && rcHasHook && err == nil {
+		fmt.Println("\nsetup looks fine — run `backscroll run` to start recording.")
+	}
 	return nil
 }

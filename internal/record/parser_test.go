@@ -164,3 +164,12 @@ func TestManyCommands(t *testing.T) {
 		t.Fatalf("cmd42=%q out42=%q", c.cmds[42], c.outs[42])
 	}
 }
+
+func TestToggleOSC(t *testing.T) {
+	var states []bool
+	p := NewParser(Events{Toggle: func(on bool) { states = append(states, on) }})
+	p.Feed([]byte("\x1b]6973;rec=off\x07some text\x1b]6973;rec=on\x07"))
+	if len(states) != 2 || states[0] != false || states[1] != true {
+		t.Fatalf("got %v, want [false true]", states)
+	}
+}
