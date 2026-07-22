@@ -296,3 +296,17 @@ func (s *Store) Delete(id int64) error {
 	_, err := s.db.Exec(`DELETE FROM commands WHERE id=?`, id)
 	return err
 }
+
+// PrevSame returns the most recent command before beforeID whose command
+// line matches cmd exactly. Used by `backscroll diff <id>` to compare a
+// command against its previous run.
+func (s *Store) PrevSame(beforeID int64, cmd string) (*Command, error) {
+	row := s.db.QueryRow(
+		`SELECT id FROM commands WHERE id < ? AND cmd = ? ORDER BY id DESC LIMIT 1`,
+		beforeID, cmd)
+	var id int64
+	if err := row.Scan(&id); err != nil {
+		return nil, err
+	}
+	return s.Get(id)
+}

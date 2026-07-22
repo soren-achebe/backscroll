@@ -18,6 +18,12 @@ $ backscroll show 3141        # ...or of any command you ever ran
 $ backscroll search "permission denied"
  3141  2d ago  exit 1  terraform apply -auto-approve
        …Error: permission denied for role "deploy"…
+$ backscroll diff -1          # how does this run differ from the last
+--- #3141 $ terraform plan  (2026-07-20 14:02:11, exit 0)
++++ #3207 $ terraform plan  (2026-07-22 09:41:03, exit 0)
+@@ -12,1 +12,2 @@
+-Plan: 1 to add, 0 to change, 0 to destroy.
++Plan: 3 to add, 1 to change, 0 to destroy.
 ```
 
 You know the moment: a command printed the answer you need — a token, an
@@ -94,6 +100,8 @@ Or grab a static binary from [releases](https://github.com/soren-achebe/backscro
 | `backscroll show 3141` | by id · `--raw` keeps colors |
 | `backscroll search <text>` | full-text search commands + outputs |
 | `backscroll list -n 50` | recent commands with exit/duration/size |
+| `backscroll diff 3141` | what changed vs. the **previous run of the same command** |
+| `backscroll diff -2 -1` | unified diff of any two stored outputs (`-U n` context) |
 | `backscroll stats` | how much is stored |
 | `backscroll prune --older 30d` | forget old entries |
 | `backscroll delete <id>` | forget one entry (that `curl -H "Authorization: ..."`) |
@@ -135,8 +143,8 @@ responsibility. backscroll is local-only by design. Still:
 ## Status
 
 Early but working: bash, zsh, and fish on Linux and macOS, with
-ignore-patterns, session pause (`off`/`on`), and a `doctor` command.
-On the roadmap: cross-machine sync, tmux integration, output diffing —
+ignore-patterns, session pause (`off`/`on`), output diffing, and a `doctor` command.
+On the roadmap: cross-machine sync, tmux integration —
 issues and PRs welcome.
 
 ## License

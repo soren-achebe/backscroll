@@ -19,6 +19,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/soren-achebe/backscroll/internal/ansi"
+	"github.com/soren-achebe/backscroll/internal/diff"
 	"github.com/soren-achebe/backscroll/internal/record"
 	"github.com/soren-achebe/backscroll/internal/store"
 )
@@ -46,6 +47,9 @@ Usage:
                                  -2 = one before last, etc.  --raw keeps colors
   backscroll last [-n N]         alias for list
   backscroll search <query>      full-text search over commands + outputs
+  backscroll diff <a> [b]        diff two stored outputs (ids or -N offsets);
+                                 with one arg, diffs against the previous run
+                                 of the same command ("what changed?")
   backscroll stats               database statistics
   backscroll prune --older 30d   delete old entries
   backscroll delete <id>         delete one entry
@@ -78,6 +82,8 @@ func main() {
 		err = cmdShow(args)
 	case "search":
 		err = cmdSearch(args)
+	case "diff":
+		err = cmdDiff(args)
 	case "stats":
 		err = cmdStats()
 	case "prune":
@@ -484,5 +490,87 @@ func cmdDoctor() error {
 	} else if !inSession && rcHasHook && err == nil {
 		fmt.Println("\nsetup looks fine — run `backscroll run` to start recording.")
 	}
+	return nil
+}
+
+// cmdDiff diffs the stored outputs of two commands. With a single target
+// it diffs against the previous run of the same command line. Like
+// diff(1): exit 0 if identical, 1 if different.
+func cmdDiff(args []string) error {
+	context := 3
+	var targets []int64
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "-U" || a == "--context":
+			if i+1 >= len(args) {
+				return fmt.Errorf("%s needs a value", a)
+			}
+			n, err := strconv.Atoi(args[i+1])
+			if err != nil || n < 0 {
+				return fmt.Errorf("bad context %q", args[i+1])
+			}
+			context = n
+			i++
+		case strings.HasPrefix(a, "-U="):
+			n, err := strconv.Atoi(a[3:])
+			if err != nil || n < 0 {
+				return fmt.Errorf("bad context %q", a[3:])
+			}
+			context = n
+		default:
+			n, err := strconv.ParseInt(a, 10, 64)
+			if err != nil || n == 0 {
+				return fmt.Errorf("usage: backscroll diff [-U n] <a> [b]   (ids or -N offsets)")
+			}
+			targets = append(targets, n)
+		}
+	}
+	if len(targets) == 0 {
+		targets = []int64{-1}
+	}
+	if len(targets) > 2 {
+		return fmt.Errorf("diff takes at most two targets")
+	}
+	st, err := openStore()
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+
+	var older, newer *store.Command
+	if len(targets) == 2 {
+		older, err = st.Get(targets[0])
+		if err != nil {
+			return fmt.Errorf("not found (%v)", err)
+		}
+		newer, err = st.Get(targets[1])
+		if err != nil {
+			return fmt.Errorf("not found (%v)", err)
+		}
+	} else {
+		newer, err = st.Get(targets[0])
+		if err != nil {
+			return fmt.Errorf("not found (%v)", err)
+		}
+		older, err = st.PrevSame(newer.ID, newer.Cmd)
+		if err != nil {
+			return fmt.Errorf("no previous run of %q found", newer.Cmd)
+		}
+	}
+
+	label := func(c *store.Command) string {
+		return fmt.Sprintf("#%d $ %s  (%s, exit %s)",
+			c.ID, c.Cmd, c.StartedAt.Format("2006-01-02 15:04:05"), exitStr(*c))
+	}
+	ops := diff.Lines(string(ansi.Strip(older.Output)), string(ansi.Strip(newer.Output)))
+	color := term.IsTerminal(int(os.Stdout.Fd()))
+	u := diff.Unified(ops, label(older), label(newer), context, color)
+	if u == "" {
+		fmt.Fprintf(os.Stderr, "backscroll: outputs of #%d and #%d are identical\n", older.ID, newer.ID)
+		return nil
+	}
+	os.Stdout.WriteString(u)
+	os.Exit(1) // like diff(1): differences found
 	return nil
 }
