@@ -210,10 +210,10 @@ func TestListFilters(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	addAt(s1, "make", "/src/app", 2, old)          // 1: old, failed, /src/app
-	addAt(s1, "ls", "/src/app/sub", 0, now)        // 2: /src/app/sub
-	addAt(s2, "go test", "/src/apple", 1, now)     // 3: sibling dir w/ prefix overlap
-	addAt(s2, "true", "/src/app", 0, now)          // 4
+	addAt(s1, "make", "/src/app", 2, old)      // 1: old, failed, /src/app
+	addAt(s1, "ls", "/src/app/sub", 0, now)    // 2: /src/app/sub
+	addAt(s2, "go test", "/src/apple", 1, now) // 3: sibling dir w/ prefix overlap
+	addAt(s2, "true", "/src/app", 0, now)      // 4
 
 	ids := func(cmds []Command) []int64 {
 		var out []int64

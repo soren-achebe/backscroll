@@ -53,14 +53,22 @@ func (c *capBuf) Write(p []byte) {
 		c.tailStart, c.tailLen = 0, c.tailCap
 		return
 	}
-	for _, b := range p {
+	// copy in at most two segments (up to the end of the ring, then wrap)
+	for len(p) > 0 {
 		idx := (c.tailStart + c.tailLen) % c.tailCap
-		c.tail[idx] = b
-		if c.tailLen < c.tailCap {
-			c.tailLen++
-		} else {
-			c.tailStart = (c.tailStart + 1) % c.tailCap
+		n := c.tailCap - idx
+		if n > len(p) {
+			n = len(p)
 		}
+		copy(c.tail[idx:idx+n], p[:n])
+		if c.tailLen+n <= c.tailCap {
+			c.tailLen += n
+		} else {
+			over := c.tailLen + n - c.tailCap
+			c.tailLen = c.tailCap
+			c.tailStart = (c.tailStart + over) % c.tailCap
+		}
+		p = p[n:]
 	}
 }
 

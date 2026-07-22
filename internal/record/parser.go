@@ -55,16 +55,26 @@ func (p *Parser) Feed(chunk []byte) {
 		}
 		out = out[:0]
 	}
-	for _, b := range chunk {
+	for i := 0; i < len(chunk); i++ {
+		b := chunk[i]
 		switch p.st {
 		case sNorm:
-			if b == 0x1b {
-				p.st = sEsc
+			// Fast path: bulk-scan to the next ESC instead of walking
+			// byte-by-byte. Plain output (the vast majority of bytes)
+			// is copied in one append.
+			j := bytes.IndexByte(chunk[i:], 0x1b)
+			if j < 0 {
+				if p.capturing && !p.altScreen {
+					out = append(out, chunk[i:]...)
+				}
+				i = len(chunk) // done
 				continue
 			}
 			if p.capturing && !p.altScreen {
-				out = append(out, b)
+				out = append(out, chunk[i:i+j]...)
 			}
+			i += j // chunk[i] is now the ESC; loop increment skips it
+			p.st = sEsc
 		case sEsc:
 			switch b {
 			case ']':

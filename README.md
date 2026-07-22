@@ -145,6 +145,23 @@ just decide which side of tmux you want it on:
 | terminal scrollback | ✓ | until it isn't | ✗ | ✗ |
 | **backscroll** | ✓ | ✓ | ✓ (FTS5) | ✓ |
 
+## Overhead
+
+Measured on a modest 2-vCPU VM (AMD EPYC), median of repeated runs — run
+them yourself with `go test ./internal/record -bench .` plus a PTY harness:
+
+- **Keystroke latency:** +0.05 ms median echo latency vs a bare shell
+  (0.22 ms vs 0.16 ms; p95 +0.1 ms). A single 60 Hz frame is 16.7 ms —
+  you cannot perceive this.
+- **Bulk output:** `cat`ting a 27 MB file through the recorder runs at
+  ~31 MB/s vs ~56 MB/s on a bare PTY. Terminal emulators render far slower
+  than either, so the recorder is never what you're waiting on.
+- **Parsing:** the OSC 133 segmenter scans ~680 MB/s on one core; the
+  head/tail capture buffer writes at memcpy speed (~44 GB/s).
+- **Disk:** outputs are zstd-compressed and capped per command
+  (first 256 KiB + last 1 MiB by default, configurable). A typical day of
+  interactive work adds a few MB to one SQLite file.
+
 ## Privacy notes
 
 Recording everything your terminal prints is the point — and a

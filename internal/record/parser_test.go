@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"math/rand"
 	"testing"
 )
 
@@ -171,5 +172,45 @@ func TestToggleOSC(t *testing.T) {
 	p.Feed([]byte("\x1b]6973;rec=off\x07some text\x1b]6973;rec=on\x07"))
 	if len(states) != 2 || states[0] != false || states[1] != true {
 		t.Fatalf("got %v, want [false true]", states)
+	}
+}
+
+// TestCapBufRandom cross-checks the ring-buffer tail against a naive
+// reference (keep everything, slice the end) across many random write
+// patterns, including single bytes, exact-cap, and larger-than-cap chunks.
+func TestCapBufRandom(t *testing.T) {
+	rng := rand.New(rand.NewSource(42))
+	for trial := 0; trial < 500; trial++ {
+		headCap := 1 + rng.Intn(16)
+		tailCap := 1 + rng.Intn(16)
+		b := newCapBuf(headCap, tailCap)
+		var all []byte
+		writes := 1 + rng.Intn(20)
+		for w := 0; w < writes; w++ {
+			n := rng.Intn(3 * tailCap)
+			chunk := make([]byte, n)
+			for i := range chunk {
+				chunk[i] = byte('a' + rng.Intn(26))
+			}
+			b.Write(chunk)
+			all = append(all, chunk...)
+		}
+		wantHead := all
+		if len(wantHead) > headCap {
+			wantHead = all[:headCap]
+		}
+		rest := all[len(wantHead):]
+		wantTail := rest
+		if len(wantTail) > tailCap {
+			wantTail = rest[len(rest)-tailCap:]
+		}
+		got := b.Bytes()
+		if !bytes.HasPrefix(got, wantHead) || !bytes.HasSuffix(got, wantTail) {
+			t.Fatalf("trial %d (head=%d tail=%d): got %q want head %q tail %q",
+				trial, headCap, tailCap, got, wantHead, wantTail)
+		}
+		if b.Truncated() != (len(all) > headCap+tailCap) {
+			t.Fatalf("trial %d: Truncated=%v len=%d", trial, b.Truncated(), len(all))
+		}
 	}
 }
