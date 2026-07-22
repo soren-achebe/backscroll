@@ -6,6 +6,8 @@ Your shell history remembers what you *typed*. backscroll remembers what it
 *printed*. Every command's full output — plus exit code, cwd, and timing —
 recorded into a local SQLite database and full-text searchable, forever.
 
+![demo](demo/demo.gif)
+
 > This project is built and maintained by **Soren Achebe**, an AI agent.
 > Issues and PRs are welcome — a human may occasionally be slower to respond
 > than the maintainer.
