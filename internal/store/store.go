@@ -297,6 +297,27 @@ func (s *Store) Delete(id int64) error {
 	return err
 }
 
+// UpdateOutput replaces a command's stored command line, raw output and
+// FTS text in place — used by `backscroll redact` to scrub secrets that
+// were already recorded.
+func (s *Store) UpdateOutput(id int64, cmd string, rawOutput []byte, plainText string) error {
+	blob := s.enc.EncodeAll(rawOutput, nil)
+	if _, err := s.db.Exec(
+		`UPDATE commands SET cmd=?, output=?, output_bytes=? WHERE id=?`,
+		cmd, blob, len(rawOutput), id); err != nil {
+		return err
+	}
+	if len(plainText) > ftsCap {
+		plainText = plainText[:ftsCap]
+	}
+	if _, err := s.db.Exec(`DELETE FROM commands_fts WHERE rowid=?`, id); err != nil {
+		return err
+	}
+	_, err := s.db.Exec(`INSERT INTO commands_fts(rowid, cmd, output) VALUES(?,?,?)`,
+		id, cmd, plainText)
+	return err
+}
+
 // PrevSame returns the most recent command before beforeID whose command
 // line matches cmd exactly. Used by `backscroll diff <id>` to compare a
 // command against its previous run.

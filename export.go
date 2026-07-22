@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/soren-achebe/backscroll/internal/ansi"
+	"github.com/soren-achebe/backscroll/internal/redact"
 	"github.com/soren-achebe/backscroll/internal/store"
 )
 
@@ -20,6 +21,7 @@ func cmdExport(args []string) error {
 	format := fs.String("format", "md", "output format: md, cast, json")
 	details := fs.Bool("details", false, "md: wrap in a collapsible <details> block")
 	raw := fs.Bool("raw", false, "md/json: keep ANSI colors (cast always keeps them)")
+	doRedact := fs.Bool("redact", false, "mask secrets (tokens, keys, passwords) before exporting")
 	out := fs.String("o", "", "write to file instead of stdout")
 
 	// Accept ids and bare -N offsets anywhere (like show/diff): -1 = last,
@@ -56,6 +58,13 @@ func cmdExport(args []string) error {
 			return fmt.Errorf("%s: not found (%v)", p, err)
 		}
 		cmds = append(cmds, c)
+	}
+	if *doRedact {
+		extra := redact.LoadExtra()
+		for _, c := range cmds {
+			c.Cmd, _ = redact.String(c.Cmd, extra)
+			c.Output, _ = redact.Bytes(c.Output, extra)
+		}
 	}
 
 	w := os.Stdout

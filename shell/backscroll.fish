@@ -23,6 +23,6 @@ end
 
 # Tab completion (active in and out of recorded sessions).
 complete -c backscroll -f
-complete -c backscroll -n __fish_use_subcommand -a "run init list last show search diff export stats prune delete off on doctor version help"
+complete -c backscroll -n __fish_use_subcommand -a "run init list last show search diff export stats prune delete redact off on doctor version help"
 complete -c backscroll -n "__fish_seen_subcommand_from init" -a "bash zsh fish"
 complete -c backscroll -n "__fish_seen_subcommand_from export" -l format -a "md cast json"

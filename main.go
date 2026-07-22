@@ -21,6 +21,7 @@ import (
 	"github.com/soren-achebe/backscroll/internal/ansi"
 	"github.com/soren-achebe/backscroll/internal/diff"
 	"github.com/soren-achebe/backscroll/internal/record"
+	"github.com/soren-achebe/backscroll/internal/redact"
 	"github.com/soren-achebe/backscroll/internal/store"
 )
 
@@ -57,12 +58,16 @@ Usage:
   backscroll stats               database statistics
   backscroll prune --older 30d   delete old entries
   backscroll delete <id>         delete one entry
+  backscroll redact <id|-N ...>  permanently mask secrets (tokens, keys,
+                                 passwords) in stored entries; --dry-run
+                                 previews. show/export take --redact too
   backscroll off | on            pause / resume recording (this session)
   backscroll doctor              check that everything is set up correctly
   backscroll version             print version
 
 Ignore patterns: one Go regexp per line in ~/.config/backscroll/ignore —
 matching commands are never stored (see 'backscroll doctor' for the path).
+Extra redact patterns: one Go regexp per line in ~/.config/backscroll/redact.
 
 Data lives in ~/.local/share/backscroll/backscroll.db (override: $BACKSCROLL_DB).
 Everything is local; nothing ever leaves your machine.
@@ -96,6 +101,8 @@ func main() {
 		err = cmdPrune(args)
 	case "delete":
 		err = cmdDelete(args)
+	case "redact":
+		err = cmdRedact(args)
 	case "off", "on":
 		err = cmdToggle(cmd)
 	case "doctor":
@@ -243,6 +250,7 @@ func cmdShow(args []string) error {
 	fs := flag.NewFlagSet("show", flag.ExitOnError)
 	raw := fs.Bool("raw", false, "keep ANSI colors / control sequences")
 	quiet := fs.Bool("q", false, "output only, no header")
+	doRedact := fs.Bool("redact", false, "mask secrets (tokens, keys, passwords) in the output")
 	// allow "show -2" style (bare -N = Nth from last) and flags in any
 	// position ("show 5 -q"): split flags from positionals ourselves.
 	// All show flags are booleans, so this is safe.
@@ -276,6 +284,9 @@ func cmdShow(args []string) error {
 	if err != nil {
 		return fmt.Errorf("not found (%v)", err)
 	}
+	if *doRedact {
+		c.Cmd, _ = redact.String(c.Cmd, redact.LoadExtra())
+	}
 	if !*quiet {
 		fmt.Printf("\x1b[1m$ %s\x1b[0m\n", c.Cmd)
 		fmt.Printf("\x1b[2m# id %d · %s · cwd %s · exit %s · took %s · %s\x1b[0m\n",
@@ -285,6 +296,9 @@ func cmdShow(args []string) error {
 	out := c.Output
 	if !*raw {
 		out = ansi.Strip(out)
+	}
+	if *doRedact {
+		out, _ = redact.Bytes(out, redact.LoadExtra())
 	}
 	os.Stdout.Write(out)
 	if len(out) > 0 && out[len(out)-1] != '\n' {
@@ -400,6 +414,57 @@ func cmdDelete(args []string) error {
 	return nil
 }
 
+// cmdRedact permanently scrubs secrets from stored entries: the command
+// line, the raw output, and the search index are all rewritten in place.
+func cmdRedact(args []string) error {
+	fs := flag.NewFlagSet("redact", flag.ExitOnError)
+	dry := fs.Bool("dry-run", false, "report what would be masked without changing the store")
+	var flags, pos []string
+	for _, a := range args {
+		if _, err := strconv.ParseInt(a, 10, 64); err == nil {
+			pos = append(pos, a) // ids and -N offsets, flags may interleave
+			continue
+		}
+		flags = append(flags, a)
+	}
+	fs.Parse(flags)
+	pos = append(pos, fs.Args()...)
+	if len(pos) == 0 {
+		return fmt.Errorf("usage: backscroll redact [--dry-run] <id|-N> [...]\n" +
+			"permanently masks secrets in stored entries (see also: show --redact, export --redact)")
+	}
+	st, err := openStore()
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	extra := redact.LoadExtra()
+	for _, p := range pos {
+		n, _ := strconv.ParseInt(p, 10, 64)
+		c, err := st.Get(n)
+		if err != nil {
+			return fmt.Errorf("%s: not found (%v)", p, err)
+		}
+		newCmd, hitsCmd := redact.String(c.Cmd, extra)
+		newOut, hitsOut := redact.Bytes(c.Output, extra)
+		hits := hitsCmd + hitsOut
+		if hits == 0 {
+			fmt.Printf("entry %d: nothing to redact\n", c.ID)
+			continue
+		}
+		if *dry {
+			fmt.Printf("entry %d: would mask %d secret(s)\n", c.ID, hits)
+			continue
+		}
+		plain := string(ansi.Strip(newOut))
+		if err := st.UpdateOutput(c.ID, newCmd, newOut, plain); err != nil {
+			return fmt.Errorf("entry %d: %v", c.ID, err)
+		}
+		fmt.Printf("entry %d: masked %d secret(s)\n", c.ID, hits)
+	}
+	return nil
+}
+
 func cmdToggle(which string) error {
 	if os.Getenv("BACKSCROLL_ACTIVE") == "" {
 		return fmt.Errorf("not inside a backscroll session (start one with: backscroll run)")
@@ -489,6 +554,12 @@ func cmdDoctor() error {
 		fmt.Printf("· ignore patterns   : %d active (%s)\n", n, ig)
 	} else {
 		fmt.Printf("· ignore patterns   : none (create %s — one Go regexp per line)\n", ig)
+	}
+	rf := redact.File()
+	if _, err := os.Stat(rf); err == nil {
+		fmt.Printf("· redact patterns   : %d extra (%s) + built-ins\n", len(redact.LoadExtra()), rf)
+	} else {
+		fmt.Printf("· redact patterns   : built-ins only (extras: %s — one Go regexp per line)\n", rf)
 	}
 
 	if inSession && hooked && err == nil && serr == nil {

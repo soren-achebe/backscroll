@@ -110,6 +110,7 @@ Or grab a static binary from [releases](https://github.com/soren-achebe/backscro
 | `backscroll stats` | how much is stored |
 | `backscroll prune --older 30d` | forget old entries |
 | `backscroll delete <id>` | forget one entry (that `curl -H "Authorization: ..."`) |
+| `backscroll redact <id\|-N>` | permanently mask tokens/keys/passwords in a stored entry (`--dry-run` previews) |
 | `backscroll off` / `on` | pause / resume recording in this session |
 | `backscroll doctor` | check that everything is wired up |
 
@@ -140,6 +141,15 @@ responsibility. backscroll is local-only by design. Still:
   resumes) — for that quick credential dance.
 - `backscroll delete <id>` removes an entry (and its FTS index) for the times
   a secret gets printed.
+- **Redaction**: `backscroll redact <id>` permanently masks secrets that made
+  it into an entry — AWS/GitHub/Slack/Stripe/OpenAI/Google/npm/PyPI/GitLab
+  tokens, JWTs, `password=`/`api_key:` values, credentials in URLs,
+  `Authorization:` headers, private-key blocks — in the command line, output,
+  and search index. `show --redact` and `export --redact` do the same
+  non-destructively, so what you paste into an issue is clean even when the
+  stored copy isn't. Add your own patterns (one Go regexp per line) in
+  `~/.config/backscroll/redact`. Pattern-based masking is best-effort — eyeball
+  before you share.
 - `backscroll prune --older 30d` keeps a rolling window.
 - The DB is `0700`-dir/`0644`-file under your home; treat it like your shell
   history file.
