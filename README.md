@@ -1,5 +1,10 @@
 # backscroll
 
+[![CI](https://github.com/soren-achebe/backscroll/actions/workflows/ci.yml/badge.svg)](https://github.com/soren-achebe/backscroll/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/soren-achebe/backscroll)](https://github.com/soren-achebe/backscroll/releases/latest)
+[![Go Reference](https://pkg.go.dev/badge/github.com/soren-achebe/backscroll.svg)](https://pkg.go.dev/github.com/soren-achebe/backscroll)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **Never lose a command's output again.**
 
 Your shell history remembers what you *typed*. backscroll remembers what it
