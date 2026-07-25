@@ -106,6 +106,21 @@ Share commands and their outputs: GitHub-flavored markdown (default),
 asciinema v2 cast, or JSON.\&
 .P
 .RE
+\fBsync\fR <\fBinit\fR \fIdir\fR|\fBexport\fR|\fBimport\fR|\fBstatus\fR>
+.RS 4
+Cross-machine history sync through a shared directory (Syncthing,
+Dropbox, rsync — any file sync works; no server involved).\& Each
+machine appends its own end-to-end-encrypted log (XChaCha20-Poly1305;
+shared key file \fI~/.\&config/backscroll/sync.\&key\fR that you copy to each
+machine) and imports the others'\&.\& \fBinit\fR \fIdir\fR sets it up, \fBexport\fR
+writes new local history, \fBimport\fR pulls in other machines'\& history,
+\fBstatus\fR shows per-machine progress and the key fingerprint.\& Redact
+and ignore patterns are applied \fBbefore\fR anything leaves the machine;
+imported entries appear in \fBlist\fR/\fBsearch\fR/\fBpick\fR tagged with their
+host (filter with \fB--host\fR).\& Set \fI$BACKSCROLL_HOST\fR to override this
+machine'\&s advertised hostname.\& Design: \fIdocs/sync-design.\&md\fR.\&
+.P
+.RE
 \fBstats\fR
 .RS 4
 Database statistics.\&
@@ -162,6 +177,12 @@ Only commands newer than the given age or date (local time).\&
 Only commands from the given recording session.\&
 .P
 .RE
+\fB--host\fR \fINAME\fR|\fBlocal\fR
+.RS 4
+Only commands recorded on the given synced machine, or (\fBlocal\fR) on
+this machine.\&
+.P
+.RE
 .SH FILES
 .P
 \fI~/.\&local/share/backscroll/backscroll.\&db\fR
@@ -179,6 +200,17 @@ One Go regexp per line; matching commands are never stored.\&
 .RS 4
 Extra secret-masking patterns (one Go regexp per line) applied by
 \fBredact\fR and \fB--redact\fR.\&
+.P
+.RE
+\fI~/.\&config/backscroll/sync.\&key\fR
+.RS 4
+Shared symmetric key for \fBsync\fR (64 hex chars).\& Copy it to every
+machine; anyone holding it can read your synced history.\&
+.P
+.RE
+\fI~/.\&config/backscroll/sync.\&json\fR
+.RS 4
+Local sync configuration (sync directory, this machine'\&s id).\&
 .P
 .RE
 .SH PRIVACY

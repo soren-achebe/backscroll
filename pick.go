@@ -63,8 +63,8 @@ func cmdPick(args []string) error {
 		if *doRedact {
 			cmdText, _ = redact.String(cmdText, redact.LoadExtra())
 		}
-		fmt.Fprintf(&b, "%d\t\x1b[2m%-12s\x1b[0m %s %s\n",
-			c.ID, fmtAgo(c.StartedAt), mark, oneLine(cmdText, 300))
+		fmt.Fprintf(&b, "%d\t\x1b[2m%-12s\x1b[0m %s %s%s\n",
+			c.ID, fmtAgo(c.StartedAt), mark, hostTag(c, true), oneLine(cmdText, 300))
 	}
 
 	self, err := os.Executable()

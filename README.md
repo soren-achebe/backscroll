@@ -146,6 +146,8 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 | `backscroll export -1` | command + output as a markdown block, ready to paste into an issue (`--details` folds it) |
 | `backscroll export 3141 --format cast` | asciicast v2 — replay with `asciinema play` |
 | `backscroll export -1 --format json` | structured record for scripting |
+| `backscroll sync init ~/Sync/bks` | cross-machine sync through any shared folder — encrypted, serverless ([details](#cross-machine-sync)) |
+| `... --host laptop` / `--host local` | list/search/pick filter: only that machine's history |
 | `backscroll stats` | how much is stored |
 | `backscroll prune --older 30d` | forget old entries |
 | `backscroll delete <id>` | forget one entry (that `curl -H "Authorization: ..."`) |
@@ -182,9 +184,39 @@ just decide which side of tmux you want it on:
   stored output (`prefix + F` = failures only). Any pane, any time —
   enter pages through the full output, `q` back to work.
 - **Over SSH:** backscroll records on whichever machine the shell runs.
-  Install it on the remote host and add the rc snippet there; your
-  laptop's DB and the server's DB stay separate (cross-machine sync is
-  on the roadmap — [design sketch](docs/sync-design.md)).
+  Install it on the remote host and add the rc snippet there; use
+  [sync](#cross-machine-sync) if you want the histories merged.
+
+## Cross-machine sync
+
+`backscroll search "connection refused"` — across your laptop, your desktop,
+and that build box you SSH into:
+
+```console
+laptop$ backscroll sync init ~/Sync/backscroll   # any shared folder:
+                                                 # Syncthing, Dropbox, rsync…
+laptop$ backscroll sync export
+desktop$ # copy ~/.config/backscroll/sync.key from the laptop, then:
+desktop$ backscroll sync init ~/Sync/backscroll
+desktop$ backscroll sync import
+desktop$ backscroll search "connection refused"      # both machines' history
+ 3141  2d ago  exit 1  [laptop] curl http://10.0.0.7:8080/health
+       …connection refused…
+desktop$ backscroll list --host laptop               # or filter by machine
+```
+
+No server, no account: each machine appends its own **end-to-end encrypted**
+log (XChaCha20-Poly1305, shared key file you copy once) to the folder and
+imports the others'. Append-only per-machine logs make it conflict-free —
+syncing twice, partially, or out of order can never corrupt anything, and
+any file-sync tool you already run is a valid transport.
+
+Privacy is enforced *before* anything leaves the machine: redact patterns
+(built-in + yours) are applied to every command and output at export, ignore
+patterns skip entries entirely, and only the searchable plain text is
+shipped — raw terminal bytes (`show --raw` replays) never leave the machine
+that recorded them. `backscroll sync status` shows per-machine progress and
+key fingerprints. Design notes: [docs/sync-design.md](docs/sync-design.md).
 
 ## vs. other tools
 
@@ -241,17 +273,18 @@ responsibility. backscroll is local-only by design. Still:
   before you share.
 - `backscroll prune --older 30d` keeps a rolling window.
 - The DB is `0700`-dir/`0644`-file under your home; treat it like your shell
-  history file.
+  history file. Same for `~/.config/backscroll/sync.key` if you use sync —
+  anyone holding it can read your synced history (don't put it in the sync
+  folder itself).
 - Don't run it on shared accounts.
 
 ## Status
 
 Early but working: bash, zsh, and fish on Linux and macOS, with
 ignore-patterns, session pause (`off`/`on`), output diffing, the fzf picker
-(`pick`, Ctrl-X Ctrl-P, tmux popups), and a `doctor` command.
-On the roadmap: cross-machine sync
-([design sketch](docs/sync-design.md), feedback welcome) —
-issues and PRs welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+(`pick`, Ctrl-X Ctrl-P, tmux popups), encrypted cross-machine sync, and a
+`doctor` command.
+Issues and PRs welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

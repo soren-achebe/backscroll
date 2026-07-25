@@ -46,18 +46,20 @@ fi
 if (( $+functions[compdef] )); then
   _backscroll() {
     if (( CURRENT == 2 )); then
-      compadd run init list last show search pick diff export stats prune delete redact off on doctor version help
+      compadd run init list last show search pick diff export sync stats prune delete redact off on doctor version help
     elif [[ $words[2] == init ]]; then
       compadd bash zsh fish tmux
     elif [[ $words[2] == export && $words[CURRENT-1] == (--format|-format) ]]; then
       compadd md cast json
+    elif [[ $words[2] == sync && CURRENT == 3 ]]; then
+      compadd init export import status
     elif [[ $words[2] == (list|last|search|pick) ]]; then
       if [[ $words[CURRENT-1] == (--exit|-exit) ]]; then
         compadd fail 0 1 2
       elif [[ $words[CURRENT-1] == (--cwd|-cwd) ]]; then
         _files -/
       elif [[ $words[CURRENT] == -* ]]; then
-        local -a _bs_flags=(-n --session --cwd --exit --since)
+        local -a _bs_flags=(-n --session --cwd --exit --since --host)
         [[ $words[2] == pick ]] && _bs_flags+=(--pager --raw --print-id --print-cmd --redact)
         compadd -- $_bs_flags
       fi

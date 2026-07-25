@@ -78,6 +78,19 @@ Run *backscroll doctor* to verify the setup.
 	Share commands and their outputs: GitHub-flavored markdown (default),
 	asciinema v2 cast, or JSON.
 
+*sync* <*init* _dir_|*export*|*import*|*status*>
+	Cross-machine history sync through a shared directory (Syncthing,
+	Dropbox, rsync — any file sync works; no server involved). Each
+	machine appends its own end-to-end-encrypted log (XChaCha20-Poly1305;
+	shared key file _~/.config/backscroll/sync.key_ that you copy to each
+	machine) and imports the others'. *init* _dir_ sets it up, *export*
+	writes new local history, *import* pulls in other machines' history,
+	*status* shows per-machine progress and the key fingerprint. Redact
+	and ignore patterns are applied *before* anything leaves the machine;
+	imported entries appear in *list*/*search*/*pick* tagged with their
+	host (filter with *--host*). Set _$BACKSCROLL_HOST_ to override this
+	machine's advertised hostname. Design: _docs/sync-design.md_.
+
 *stats*
 	Database statistics.
 
@@ -114,6 +127,10 @@ Run *backscroll doctor* to verify the setup.
 *--session* _ID_
 	Only commands from the given recording session.
 
+*--host* _NAME_|*local*
+	Only commands recorded on the given synced machine, or (*local*) on
+	this machine.
+
 # FILES
 
 _~/.local/share/backscroll/backscroll.db_
@@ -126,6 +143,13 @@ _~/.config/backscroll/ignore_
 _~/.config/backscroll/redact_
 	Extra secret-masking patterns (one Go regexp per line) applied by
 	*redact* and *--redact*.
+
+_~/.config/backscroll/sync.key_
+	Shared symmetric key for *sync* (64 hex chars). Copy it to every
+	machine; anyone holding it can read your synced history.
+
+_~/.config/backscroll/sync.json_
+	Local sync configuration (sync directory, this machine's id).
 
 # PRIVACY
 

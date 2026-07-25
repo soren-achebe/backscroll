@@ -1,6 +1,16 @@
-# Cross-machine sync — design sketch (not implemented)
+# Cross-machine sync — design notes
 
-Status: **draft / request for comments** — see the tracking issue for discussion.
+Status: **implemented** (v0.3.0) as designed, with three simplifications:
+segments are immutable (each `sync export` seals one or more new segments,
+split at ~4 MB, instead of rewriting the newest in place), the per-machine
+sequence number **is the local command id** (gaps from ignored/pruned
+entries are fine, and a crashed export re-runs byte-identically, so
+importers can't see duplicates), and segment filenames carry their seq
+range (`<first>-<last>.seg`) so imports skip already-seen segments without
+decrypting. Filenames + machine id are bound into the AEAD as associated
+data, so segments can't be renamed or moved between logs. Open questions
+below (tombstones, caps) are still open — discussion welcome in the
+tracking issue.
 
 ## Problem
 
@@ -47,8 +57,8 @@ as CRDT op logs / atuin's per-host stores).
 
 - `machine-id` is random, not the hostname — hostnames collide and change.
   The human-readable name lives in `meta.json` and in each record.
-- Segments are sealed once full; the newest segment is rewritten in place
-  until it reaches the size cap (writes are atomic tmp+rename).
+- Segments are immutable once written (atomic tmp+rename); each export
+  seals one or more new segments, split at ~4 MB of plaintext.
 
 ### Record format
 

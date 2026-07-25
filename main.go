@@ -63,7 +63,7 @@ Usage:
                                   fish: backscroll init fish | source)
   backscroll list [-n N]         recent commands; filter with --cwd DIR,
                                  --exit CODE|fail, --since 2h|3d|1w|DATE,
-                                 --session ID
+                                 --session ID, --host NAME|local
   backscroll show [id | -N]      full stored output (default: last command)
                                  -2 = one before last, etc.  --raw keeps colors
   backscroll last [-n N]         alias for list
@@ -86,6 +86,10 @@ Usage:
   backscroll redact <id|-N ...>  permanently mask secrets (tokens, keys,
                                  passwords) in stored entries; --dry-run
                                  previews. show/search/export take --redact
+  backscroll sync <subcommand>   cross-machine sync via a shared folder,
+                                 end-to-end encrypted, no server needed:
+                                 init <dir>, export, import, status
+                                 (backscroll sync --help for details)
   backscroll off | on            pause / resume recording (this session)
   backscroll doctor              check that everything is set up correctly
   backscroll version             print version
@@ -130,6 +134,8 @@ func main() {
 		err = cmdDelete(args)
 	case "redact":
 		err = cmdRedact(args)
+	case "sync":
+		err = cmdSync(args)
 	case "off", "on":
 		err = cmdToggle(cmd)
 	case "doctor":
@@ -229,8 +235,9 @@ func filterFlags(fs *flag.FlagSet) func(limit int) (store.Filter, error) {
 	cwd := fs.String("cwd", "", "only commands run in `dir` (or beneath it); \".\" = current dir")
 	exit := fs.String("exit", "", "only exit `code` (number, or \"fail\" for any nonzero)")
 	since := fs.String("since", "", "only commands newer than `t` (30m, 2h, 3d, 1w, or 2006-01-02[ 15:04])")
+	host := fs.String("host", "", "only commands from this `host` (synced machines; \"local\" = this machine)")
 	return func(limit int) (store.Filter, error) {
-		f := store.Filter{Session: *sess, Limit: limit}
+		f := store.Filter{Session: *sess, Limit: limit, Host: *host}
 		if *cwd != "" {
 			abs, err := filepath.Abs(*cwd)
 			if err != nil {
@@ -306,7 +313,7 @@ func cmdList(args []string) error {
 		return err
 	}
 	if len(cmds) == 0 {
-		if f.Session > 0 || f.Cwd != "" || f.ExitSet || f.Failed || !f.Since.IsZero() {
+		if f.Session > 0 || f.Cwd != "" || f.ExitSet || f.Failed || !f.Since.IsZero() || f.Host != "" {
 			fmt.Println("no commands match those filters")
 		} else {
 			fmt.Println("no recorded commands yet — start a session with: backscroll run")
@@ -320,15 +327,27 @@ func cmdList(args []string) error {
 		if c.ExitCode.Valid && c.ExitCode.Int64 != 0 {
 			mark = "✗"
 		}
-		line := fmt.Sprintf("%5d  %s %-12s %8s  %8s  %s",
+		line := fmt.Sprintf("%5d  %s %-12s %8s  %8s  %s%s",
 			c.ID, mark, fmtAgo(c.StartedAt), fmtDur(c.EndedAt.Sub(c.StartedAt)),
-			humanBytes(c.OutputLen), oneLine(c.Cmd, 80))
+			humanBytes(c.OutputLen), hostTag(c, color), oneLine(c.Cmd, 80))
 		if color && mark == "✗" {
 			line = "\x1b[31m" + line + "\x1b[0m"
 		}
 		fmt.Println(line)
 	}
 	return nil
+}
+
+// hostTag renders a "[host] " prefix for entries imported from another
+// machine via sync ("" for local ones).
+func hostTag(c store.Command, color bool) string {
+	if c.Local() {
+		return ""
+	}
+	if color {
+		return "\x1b[35m[" + c.Host + "]\x1b[0m "
+	}
+	return "[" + c.Host + "] "
 }
 
 func oneLine(s string, max int) string {
@@ -393,9 +412,13 @@ func cmdShow(args []string) error {
 	}
 	if !*quiet {
 		fmt.Printf("\x1b[1m$ %s\x1b[0m\n", c.Cmd)
-		fmt.Printf("\x1b[2m# id %d · %s · cwd %s · exit %s · took %s · %s\x1b[0m\n",
+		from := ""
+		if !c.Local() {
+			from = " · from " + c.Host
+		}
+		fmt.Printf("\x1b[2m# id %d · %s · cwd %s · exit %s · took %s · %s%s\x1b[0m\n",
 			c.ID, c.StartedAt.Format("2006-01-02 15:04:05"), c.Cwd, exitStr(*c),
-			fmtDur(c.EndedAt.Sub(c.StartedAt)), humanBytes(c.OutputLen))
+			fmtDur(c.EndedAt.Sub(c.StartedAt)), humanBytes(c.OutputLen), from)
 	}
 	out := c.Output
 	if !*raw {
@@ -452,8 +475,8 @@ func cmdSearch(args []string) error {
 			// them would otherwise slip past the redaction patterns
 			snip, _ = redact.String(string(ansi.Strip([]byte(snip))), extra)
 		}
-		fmt.Printf("\x1b[1m%5d\x1b[0m  %s  exit %s  \x1b[36m%s\x1b[0m\n",
-			c.ID, fmtAgo(c.StartedAt), exitStr(c), oneLine(cmd, 70))
+		fmt.Printf("\x1b[1m%5d\x1b[0m  %s  exit %s  %s\x1b[36m%s\x1b[0m\n",
+			c.ID, fmtAgo(c.StartedAt), exitStr(c), hostTag(c, true), oneLine(cmd, 70))
 		if snip != "" {
 			fmt.Printf("       %s\n", oneLine(snip, 100))
 		}
@@ -472,7 +495,11 @@ func cmdStats() error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("commands recorded : %d\n", s.Commands)
+	if s.Imported > 0 {
+		fmt.Printf("commands recorded : %d (%d synced from other machines)\n", s.Commands, s.Imported)
+	} else {
+		fmt.Printf("commands recorded : %d\n", s.Commands)
+	}
 	fmt.Printf("sessions          : %d\n", s.Sessions)
 	fmt.Printf("raw output stored : %s\n", humanBytes(s.RawBytes))
 	fmt.Printf("database size     : %s\n", humanBytes(s.DBBytes))

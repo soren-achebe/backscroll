@@ -58,6 +58,14 @@ var migrations = [][]string{
 		   updated_at INTEGER
 		 )`,
 	},
+	// v2: sync export state (single kv table; today just the high-water
+	// local command id already written to our own sync log).
+	{
+		`CREATE TABLE IF NOT EXISTS sync_state(
+		   k TEXT PRIMARY KEY,
+		   v INTEGER NOT NULL
+		 )`,
+	},
 }
 
 func migrate(db *sql.DB) error {
@@ -222,6 +230,104 @@ func (s *Store) AddImported(machine, host string, seq int64, cmd, cwd string,
 	_, err = s.db.Exec(`INSERT INTO commands_fts(rowid, cmd, output) VALUES(?,?,?)`,
 		id, cmd, plainText)
 	return true, err
+}
+
+// SyncState reads an int64 from the sync_state kv table (0 if unset).
+func (s *Store) SyncState(k string) (int64, error) {
+	var v int64
+	err := s.db.QueryRow(`SELECT v FROM sync_state WHERE k=?`, k).Scan(&v)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return v, err
+}
+
+// SetSyncState writes an int64 to the sync_state kv table.
+func (s *Store) SetSyncState(k string, v int64) error {
+	_, err := s.db.Exec(
+		`INSERT INTO sync_state(k, v) VALUES(?,?)
+		 ON CONFLICT(k) DO UPDATE SET v=excluded.v`, k, v)
+	return err
+}
+
+// ExportEntry is a locally recorded command paired with the plain
+// (ANSI-stripped) text that FTS indexed — what sync export ships.
+type ExportEntry struct {
+	Command
+	Plain string
+}
+
+// LocalAfter returns locally recorded commands with id > afterID in id
+// order (up to limit), each with its FTS plain text. Sync export uses
+// the local id as the per-machine sequence number.
+func (s *Store) LocalAfter(afterID int64, limit int) ([]ExportEntry, error) {
+	rows, err := s.db.Query(`
+		SELECT c.id, c.cmd, coalesce(c.cwd,''), c.exit_code, c.started_at, c.ended_at,
+		       coalesce(f.output,'')
+		FROM commands c LEFT JOIN commands_fts f ON f.rowid = c.id
+		WHERE c.machine IS NULL AND c.id > ?
+		ORDER BY c.id LIMIT ?`, afterID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ExportEntry
+	for rows.Next() {
+		var e ExportEntry
+		var st, en sql.NullInt64
+		if err := rows.Scan(&e.ID, &e.Cmd, &e.Cwd, &e.ExitCode, &st, &en, &e.Plain); err != nil {
+			return nil, err
+		}
+		if st.Valid {
+			e.StartedAt = time.UnixMilli(st.Int64)
+		}
+		if en.Valid {
+			e.EndedAt = time.UnixMilli(en.Int64)
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// MaxLocalID returns the highest id among locally recorded commands.
+func (s *Store) MaxLocalID() (int64, error) {
+	var id sql.NullInt64
+	err := s.db.QueryRow(`SELECT max(id) FROM commands WHERE machine IS NULL`).Scan(&id)
+	return id.Int64, err
+}
+
+// CountLocalAfter returns how many locally recorded commands have
+// id > afterID (i.e. how many `sync export` would ship).
+func (s *Store) CountLocalAfter(afterID int64) (int64, error) {
+	var n int64
+	err := s.db.QueryRow(`SELECT count(*) FROM commands WHERE machine IS NULL AND id > ?`, afterID).Scan(&n)
+	return n, err
+}
+
+// ImportState is one row of the per-foreign-machine import high-water table.
+type ImportState struct {
+	Machine string
+	Host    string
+	LastSeq int64
+}
+
+// ImportStates returns the import high-water marks for all known
+// foreign machines.
+func (s *Store) ImportStates() ([]ImportState, error) {
+	rows, err := s.db.Query(`SELECT machine, coalesce(host,''), last_seq FROM import_state ORDER BY machine`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ImportState
+	for rows.Next() {
+		var is ImportState
+		if err := rows.Scan(&is.Machine, &is.Host, &is.LastSeq); err != nil {
+			return nil, err
+		}
+		out = append(out, is)
+	}
+	return out, rows.Err()
 }
 
 // ImportedSeq returns the high-water mark for a foreign machine's log
@@ -439,6 +545,7 @@ func (s *Store) Search(query string, f Filter) ([]Command, error) {
 
 type Stats struct {
 	Commands int64
+	Imported int64 // of Commands, how many came from other machines via sync
 	Sessions int64
 	RawBytes int64
 	DBBytes  int64
@@ -451,6 +558,9 @@ func (s *Store) Stats() (Stats, error) {
 	err := s.db.QueryRow(`SELECT count(*), coalesce(sum(output_bytes),0), min(started_at) FROM commands`).
 		Scan(&st.Commands, &st.RawBytes, &first)
 	if err != nil {
+		return st, err
+	}
+	if err := s.db.QueryRow(`SELECT count(*) FROM commands WHERE machine IS NOT NULL`).Scan(&st.Imported); err != nil {
 		return st, err
 	}
 	if first.Valid {
