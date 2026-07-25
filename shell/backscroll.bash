@@ -10,6 +10,8 @@ if [[ -n "$BACKSCROLL_ACTIVE" && -z "$BACKSCROLL_HOOKED" ]]; then
     # completion or PROMPT_COMMAND itself.
     [[ -n "$COMP_LINE" ]] && return
     [[ -z "$__bks_at_prompt" ]] && return
+    # ignore our own bind -x widgets (e.g. the Ctrl-X Ctrl-P picker)
+    [[ "$BASH_COMMAND" == __bks_* ]] && return
     # ignore fragments of PROMPT_COMMAND itself
     [[ -n "$BASH_COMMAND" && "$PROMPT_COMMAND" == *"$BASH_COMMAND"* ]] && return
     unset __bks_at_prompt
@@ -34,6 +36,23 @@ if [[ -n "$BACKSCROLL_ACTIVE" && -z "$BACKSCROLL_HOOKED" ]]; then
 
   trap '__bks_preexec' DEBUG
   PROMPT_COMMAND="__bks_precmd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+fi
+
+# Ctrl-X Ctrl-P: fuzzy-pick a past command (with output preview) and insert
+# it at the prompt. Active in and out of recorded sessions; set
+# BACKSCROLL_NO_BIND=1 before sourcing to skip. Needs fzf.
+if [[ -z "$BACKSCROLL_NO_BIND" ]]; then
+  __bks_pick_insert() {
+    local sel
+    sel=$(backscroll pick --print-cmd -- "$READLINE_LINE")
+    if [[ -n "$sel" ]]; then
+      READLINE_LINE=$sel
+      READLINE_POINT=${#sel}
+    fi
+  }
+  bind -m emacs -x '"\C-x\C-p": __bks_pick_insert' 2>/dev/null
+  bind -m vi-insert -x '"\C-x\C-p": __bks_pick_insert' 2>/dev/null
+  bind -m vi-command -x '"\C-x\C-p": __bks_pick_insert' 2>/dev/null
 fi
 
 # Tab completion (active in and out of recorded sessions).

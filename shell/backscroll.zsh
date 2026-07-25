@@ -22,6 +22,26 @@ if [[ -n "$BACKSCROLL_ACTIVE" && -z "$BACKSCROLL_HOOKED" ]]; then
   add-zsh-hook precmd  __bks_precmd
 fi
 
+# Ctrl-X Ctrl-P: fuzzy-pick a past command (with output preview) and insert
+# it at the prompt. Active in and out of recorded sessions; set
+# BACKSCROLL_NO_BIND=1 before sourcing to skip. Needs fzf.
+if [[ -z "$BACKSCROLL_NO_BIND" ]]; then
+  __bks_pick_insert() {
+    setopt localoptions pipefail no_aliases 2>/dev/null
+    local sel
+    sel=$(backscroll pick --print-cmd -- "$BUFFER")
+    if [[ -n "$sel" ]]; then
+      BUFFER=$sel
+      CURSOR=$#BUFFER
+    fi
+    zle reset-prompt
+  }
+  zle -N __bks_pick_insert
+  bindkey '^X^P' __bks_pick_insert
+  bindkey -M viins '^X^P' __bks_pick_insert 2>/dev/null
+  bindkey -M vicmd '^X^P' __bks_pick_insert 2>/dev/null
+fi
+
 # Tab completion (active in and out of recorded sessions).
 if (( $+functions[compdef] )); then
   _backscroll() {

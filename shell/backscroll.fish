@@ -21,6 +21,24 @@ if test -n "$BACKSCROLL_ACTIVE"; and test -z "$BACKSCROLL_HOOKED"
     end
 end
 
+# Ctrl-X Ctrl-P: fuzzy-pick a past command (with output preview) and insert
+# it at the prompt. Active in and out of recorded sessions; set
+# BACKSCROLL_NO_BIND=1 before sourcing to skip. Needs fzf.
+if test -z "$BACKSCROLL_NO_BIND"
+    function __bks_pick_insert
+        set -l sel (backscroll pick --print-cmd -- (commandline))
+        if test -n "$sel"
+            commandline -r -- $sel
+        end
+        commandline -f repaint
+    end
+    bind \cx\cp __bks_pick_insert
+    if functions -q fish_vi_key_bindings
+        bind -M insert \cx\cp __bks_pick_insert 2>/dev/null
+        bind -M default \cx\cp __bks_pick_insert 2>/dev/null
+    end
+end
+
 # Tab completion (active in and out of recorded sessions).
 complete -c backscroll -f
 complete -c backscroll -n __fish_use_subcommand -a "run init list last show search pick diff export stats prune delete redact off on doctor version help"

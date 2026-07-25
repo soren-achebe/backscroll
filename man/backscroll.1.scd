@@ -44,9 +44,11 @@ Run *backscroll doctor* to verify the setup.
 	semantics (note that a login bash does not read _~/.bashrc_).
 
 *init* <*bash*|*zsh*|*fish*|*tmux*>
-	Print the shell-integration snippet (OSC 133 marks, cwd reporting, and
-	tab completion) for the given shell, or a tmux popup key-binding
-	snippet for _~/.tmux.conf_.
+	Print the shell-integration snippet (OSC 133 marks, cwd reporting,
+	tab completion, and a *Ctrl-X Ctrl-P* binding that opens *pick* and
+	inserts the selected command at the prompt — set
+	_$BACKSCROLL_NO_BIND_ to skip the binding) for the given shell, or a
+	tmux popup key-binding snippet for _~/.tmux.conf_.
 
 *list* [*-n* _N_] [_filters_]
 	List recent commands. Aliased as *last*.

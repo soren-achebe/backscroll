@@ -59,9 +59,11 @@ semantics (note that a login bash does not read \fI~/.\&bashrc\fR).\&
 .RE
 \fBinit\fR <\fBbash\fR|\fBzsh\fR|\fBfish\fR|\fBtmux\fR>
 .RS 4
-Print the shell-integration snippet (OSC 133 marks, cwd reporting, and
-tab completion) for the given shell, or a tmux popup key-binding
-snippet for \fI~/.\&tmux.\&conf\fR.\&
+Print the shell-integration snippet (OSC 133 marks, cwd reporting,
+tab completion, and a \fBCtrl-X Ctrl-P\fR binding that opens \fBpick\fR and
+inserts the selected command at the prompt — set
+\fI$BACKSCROLL_NO_BIND\fR to skip the binding) for the given shell, or a
+tmux popup key-binding snippet for \fI~/.\&tmux.\&conf\fR.\&
 .P
 .RE
 \fBlist\fR [\fB-n\fR \fIN\fR] [\fIfilters\fR]

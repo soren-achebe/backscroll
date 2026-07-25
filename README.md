@@ -137,6 +137,7 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 | `backscroll show 3141` | by id · `--raw` keeps colors |
 | `backscroll search <text>` | full-text search commands + outputs |
 | `backscroll pick` | fuzzy-pick a command (fzf) with live output preview |
+| **Ctrl-X Ctrl-P** at the prompt | pick a past command and insert it at your cursor (current line becomes the query) |
 | `backscroll list -n 50` | recent commands with exit/duration/size |
 | `... --exit fail --since 2h` | list/search filters: failures only, last 2 hours |
 | `... --cwd .` | only commands run in this directory (or beneath it) |
@@ -151,6 +152,14 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 | `backscroll redact <id\|-N>` | permanently mask tokens/keys/passwords in a stored entry (`--dry-run` previews) |
 | `backscroll off` / `on` | pause / resume recording in this session |
 | `backscroll doctor` | check that everything is wired up |
+
+The **Ctrl-X Ctrl-P** binding comes with the `backscroll init
+<bash|zsh|fish>` snippet (needs [fzf](https://github.com/junegunn/fzf)):
+it opens the picker over everything you've recorded — whatever you'd
+already typed becomes the initial query — and inserts the selected
+command back at your prompt, like Ctrl-R but you pick by *what the
+command printed*, not just what you typed. Set `BACKSCROLL_NO_BIND=1`
+before the snippet to opt out.
 
 ## tmux / screen / SSH
 

@@ -191,7 +191,10 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 		if buf == nil {
 			return
 		}
-		if paused || Ignored(ignorePats, curCmd) {
+		if paused || Ignored(ignorePats, curCmd) || isShellExit(curCmd) {
+			// isShellExit: a plain `exit`/`logout` is session teardown, not
+			// a command anyone wants to recall (fish emits a D mark for it,
+			// unlike bash/zsh, so it would otherwise be stored).
 			buf = nil
 			curCmd = ""
 			return
