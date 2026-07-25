@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +29,18 @@ import (
 )
 
 var version = "dev"
+
+// resolvedVersion returns the release version stamped by goreleaser, falling
+// back to the module version recorded by `go install ...@version`.
+func resolvedVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		return strings.TrimPrefix(bi.Main.Version, "v")
+	}
+	return version
+}
 
 //go:embed shell/backscroll.zsh
 var zshInit string
@@ -113,7 +126,7 @@ func main() {
 	case "doctor":
 		err = cmdDoctor()
 	case "version", "--version", "-v":
-		fmt.Println("backscroll", version)
+		fmt.Println("backscroll", resolvedVersion())
 	case "help", "--help", "-h":
 		fmt.Print(usage)
 	default:
@@ -596,7 +609,7 @@ func cmdDoctor() error {
 	}
 	fmt.Println("backscroll doctor")
 	fmt.Println("─────────────────")
-	fmt.Printf("version            : %s\n", version)
+	fmt.Printf("version            : %s\n", resolvedVersion())
 
 	shell := os.Getenv("SHELL")
 	if shell == "" {
