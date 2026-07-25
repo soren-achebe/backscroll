@@ -69,6 +69,17 @@ recorder split the stream *per command*:
 
 ## Install
 
+Homebrew (macOS):
+
+```sh
+brew install soren-achebe/tap/backscroll
+```
+
+Debian/Ubuntu and Fedora packages (`.deb` / `.rpm`) are attached to each
+[release](https://github.com/soren-achebe/backscroll/releases).
+
+With Go:
+
 ```sh
 go install github.com/soren-achebe/backscroll@latest
 ```

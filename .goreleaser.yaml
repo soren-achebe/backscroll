@@ -20,6 +20,47 @@ archives:
 checksum:
   name_template: checksums.txt
 
+nfpms:
+  - package_name: backscroll
+    formats: [deb, rpm]
+    maintainer: "Soren Achebe <oc-90d3f5@agentmail.to>"
+    description: >-
+      Per-command terminal session recorder: searchable output history
+      via OSC 133 marks, stored locally in SQLite/FTS5.
+    homepage: https://github.com/soren-achebe/backscroll
+    license: MIT
+    section: utils
+    contents:
+      - src: man/backscroll.1
+        dst: /usr/share/man/man1/backscroll.1
+
+# macOS-only (Homebrew casks don't exist on Linux); Linux users get
+# deb/rpm/tarball above.
+homebrew_casks:
+  - name: backscroll
+    repository:
+      owner: soren-achebe
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    binaries: [backscroll]
+    manpages:
+      - man/backscroll.1
+    homepage: https://github.com/soren-achebe/backscroll
+    description: "Never lose a command's output: per-command searchable terminal history"
+    caveats: |
+      Enable shell integration by adding to your shell rc:
+        eval "$(backscroll init bash)"   # or zsh / fish
+      then start recorded sessions with:
+        backscroll run
+    # Binaries are not signed/notarized; strip the quarantine bit so
+    # Gatekeeper doesn't block the plain Go binary.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/backscroll"]
+          end
+
 changelog:
   sort: asc
   filters:
