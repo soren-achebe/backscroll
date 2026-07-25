@@ -63,6 +63,9 @@ recorder split the stream *per command*:
   isn't full of TUI garbage.
 - Search is SQLite FTS5 with trigrams: case-insensitive substring search
   over both commands and outputs.
+- Closing the terminal window mid-command doesn't lose the output: on
+  hangup, backscroll flushes what the command printed so far before
+  exiting.
 
 ## Install
 

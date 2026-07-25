@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -30,6 +31,28 @@ type capBuf struct {
 
 func newCapBuf(headCap, tailCap int) *capBuf {
 	return &capBuf{headCap: headCap, tailCap: tailCap}
+}
+
+// isShellExit reports whether cmd is a plain shell terminator: `exit`,
+// `logout`, or `exit <n>` — the only commands whose C mark can never be
+// followed by a D mark because the shell is gone.
+func isShellExit(cmd string) bool {
+	f := strings.Fields(cmd)
+	switch len(f) {
+	case 1:
+		return f[0] == "exit" || f[0] == "logout"
+	case 2:
+		if f[0] != "exit" {
+			return false
+		}
+		for _, r := range f[1] {
+			if r < '0' || r > '9' {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 func (c *capBuf) Write(p []byte) {
@@ -132,6 +155,21 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 	}()
 	winch <- syscall.SIGWINCH
 
+	// Terminal closed (SIGHUP) or polite kill (SIGTERM): forward the hangup
+	// to the shell. It kills its jobs and exits, the PTY slave closes, the
+	// read loop below gets EIO and unwinds through the normal path — so the
+	// pending command's partial output still gets flushed to the store.
+	// Closing the PTY after a grace period is the hard fallback in case the
+	// shell ignores the hangup.
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP, syscall.SIGTERM)
+	go func() {
+		<-hup
+		_ = cmd.Process.Signal(syscall.SIGHUP)
+		time.Sleep(3 * time.Second)
+		_ = ptmx.Close()
+	}()
+
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err == nil {
 		defer term.Restore(int(os.Stdin.Fd()), oldState)
@@ -202,7 +240,13 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 			break
 		}
 	}
-	// If the shell died mid-command, keep what we have.
+	// If the shell died mid-command, keep what we have — unless the
+	// "command" is the shell's own terminator (`exit` / `logout`), whose
+	// session-ending C mark never gets a matching D and would otherwise be
+	// stored as a useless stub entry.
+	if isShellExit(curCmd) {
+		buf = nil
+	}
 	flush(0, false)
 
 	err = cmd.Wait()

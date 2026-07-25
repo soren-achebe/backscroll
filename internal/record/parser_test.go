@@ -214,3 +214,18 @@ func TestCapBufRandom(t *testing.T) {
 		}
 	}
 }
+
+func TestIsShellExit(t *testing.T) {
+	yes := []string{"exit", "logout", "exit 0", "exit 130", " exit ", "exit  1"}
+	no := []string{"", "exits", "exit now", "exit 1 2", "logout 1", "git exit", "exit -1", "echo exit"}
+	for _, c := range yes {
+		if !isShellExit(c) {
+			t.Errorf("isShellExit(%q) = false, want true", c)
+		}
+	}
+	for _, c := range no {
+		if isShellExit(c) {
+			t.Errorf("isShellExit(%q) = true, want false", c)
+		}
+	}
+}
