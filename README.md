@@ -70,8 +70,16 @@ recorder split the stream *per command*:
 go install github.com/soren-achebe/backscroll@latest
 ```
 
-Or grab a static binary from [releases](https://github.com/soren-achebe/backscroll/releases)
-(release tarballs include a man page: `man/backscroll.1`; source is
+Or grab a static binary (linux/darwin × amd64/arm64) from
+[releases](https://github.com/soren-achebe/backscroll/releases):
+
+```sh
+curl -sL https://github.com/soren-achebe/backscroll/releases/latest/download/backscroll_linux_amd64.tar.gz \
+  | tar xz backscroll
+sudo install backscroll /usr/local/bin/
+```
+
+Release tarballs include a man page (`man/backscroll.1`; source is
 [scdoc](https://git.sr.ht/~sircmpwn/scdoc), rebuild with
 `scdoc < man/backscroll.1.scd > man/backscroll.1`).
 
