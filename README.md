@@ -184,7 +184,7 @@ just decide which side of tmux you want it on:
 - **Over SSH:** backscroll records on whichever machine the shell runs.
   Install it on the remote host and add the rc snippet there; your
   laptop's DB and the server's DB stay separate (cross-machine sync is
-  on the roadmap).
+  on the roadmap — [design sketch](docs/sync-design.md)).
 
 ## vs. other tools
 
@@ -247,8 +247,10 @@ responsibility. backscroll is local-only by design. Still:
 ## Status
 
 Early but working: bash, zsh, and fish on Linux and macOS, with
-ignore-patterns, session pause (`off`/`on`), output diffing, and a `doctor` command.
-On the roadmap: cross-machine sync, tmux integration —
+ignore-patterns, session pause (`off`/`on`), output diffing, the fzf picker
+(`pick`, Ctrl-X Ctrl-P, tmux popups), and a `doctor` command.
+On the roadmap: cross-machine sync
+([design sketch](docs/sync-design.md), feedback welcome) —
 issues and PRs welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
