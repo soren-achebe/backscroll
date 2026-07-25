@@ -36,6 +36,58 @@ CREATE INDEX IF NOT EXISTS idx_commands_started ON commands(started_at);
 CREATE VIRTUAL TABLE IF NOT EXISTS commands_fts USING fts5(cmd, output, tokenize='trigram');
 `
 
+// migrations are applied in order on top of the base schema; PRAGMA
+// user_version tracks how many have run. Each entry is a list of
+// statements executed in one transaction. Never edit an entry that has
+// shipped — append a new one.
+var migrations = [][]string{
+	// v1: cross-machine sync groundwork (docs/sync-design.md).
+	// Foreign entries carry the origin machine id + human-readable host
+	// and their per-machine sequence number; (machine, origin_seq) is
+	// unique so re-import is a no-op. Local entries keep NULLs.
+	{
+		`ALTER TABLE commands ADD COLUMN machine TEXT`,
+		`ALTER TABLE commands ADD COLUMN host TEXT`,
+		`ALTER TABLE commands ADD COLUMN origin_seq INTEGER`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_commands_origin
+		   ON commands(machine, origin_seq) WHERE machine IS NOT NULL`,
+		`CREATE TABLE IF NOT EXISTS import_state(
+		   machine TEXT PRIMARY KEY,
+		   host TEXT,
+		   last_seq INTEGER NOT NULL,
+		   updated_at INTEGER
+		 )`,
+	},
+}
+
+func migrate(db *sql.DB) error {
+	var v int
+	if err := db.QueryRow(`PRAGMA user_version`).Scan(&v); err != nil {
+		return err
+	}
+	for ; v < len(migrations); v++ {
+		tx, err := db.Begin()
+		if err != nil {
+			return err
+		}
+		for _, stmt := range migrations[v] {
+			if _, err := tx.Exec(stmt); err != nil {
+				tx.Rollback()
+				return fmt.Errorf("migration %d: %w", v+1, err)
+			}
+		}
+		// PRAGMA cannot take a bound parameter.
+		if _, err := tx.Exec(fmt.Sprintf(`PRAGMA user_version=%d`, v+1)); err != nil {
+			tx.Rollback()
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type Store struct {
 	db  *sql.DB
 	enc *zstd.Encoder
@@ -68,6 +120,10 @@ func Open() (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("init schema: %w", err)
 	}
+	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate: %w", err)
+	}
 	enc, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedDefault))
 	dec, _ := zstd.NewReader(nil)
 	return &Store{db: db, enc: enc, dec: dec}, nil
@@ -98,7 +154,14 @@ type Command struct {
 	OutputLen int64
 	Truncated bool
 	Snippet   string // populated by Search
+	Machine   string // origin machine id; "" = recorded locally
+	Host      string // origin hostname; "" = recorded locally
+	OriginSeq int64  // per-origin-machine sequence; 0 = local
 }
+
+// Local reports whether the command was recorded on this machine (as
+// opposed to imported via sync).
+func (c *Command) Local() bool { return c.Machine == "" }
 
 const ftsCap = 256 << 10 // max plain text indexed per command
 
@@ -127,6 +190,62 @@ func (s *Store) AddCommand(sessionID int64, cmd, cwd string, exitCode int, hasEx
 	return err
 }
 
+// AddImported inserts a history entry that was recorded on another
+// machine (sync import). Foreign entries have no local session
+// (session_id 0); output is the ANSI-stripped plain text, stored
+// compressed like local output and FTS-indexed. Re-importing the same
+// (machine, seq) is a no-op; the bool reports whether a row was added.
+func (s *Store) AddImported(machine, host string, seq int64, cmd, cwd string,
+	exitCode int, hasExit bool, startedAt, endedAt time.Time, plainText string) (bool, error) {
+
+	blob := s.enc.EncodeAll([]byte(plainText), nil)
+	var ec any
+	if hasExit {
+		ec = exitCode
+	}
+	res, err := s.db.Exec(
+		`INSERT OR IGNORE INTO commands(session_id, cmd, cwd, exit_code, started_at, ended_at,
+		   output, output_bytes, truncated, machine, host, origin_seq)
+		 VALUES(0,?,?,?,?,?,?,?,0,?,?,?)`,
+		cmd, cwd, ec, startedAt.UnixMilli(), endedAt.UnixMilli(),
+		blob, len(plainText), machine, host, seq)
+	if err != nil {
+		return false, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return false, nil // already imported
+	}
+	id, _ := res.LastInsertId()
+	if len(plainText) > ftsCap {
+		plainText = plainText[:ftsCap]
+	}
+	_, err = s.db.Exec(`INSERT INTO commands_fts(rowid, cmd, output) VALUES(?,?,?)`,
+		id, cmd, plainText)
+	return true, err
+}
+
+// ImportedSeq returns the high-water mark for a foreign machine's log
+// (0 if nothing imported yet).
+func (s *Store) ImportedSeq(machine string) (int64, error) {
+	var seq int64
+	err := s.db.QueryRow(`SELECT last_seq FROM import_state WHERE machine=?`, machine).Scan(&seq)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return seq, err
+}
+
+// SetImportedSeq records the high-water mark after importing from a
+// foreign machine's log.
+func (s *Store) SetImportedSeq(machine, host string, seq int64) error {
+	_, err := s.db.Exec(
+		`INSERT INTO import_state(machine, host, last_seq, updated_at) VALUES(?,?,?,?)
+		 ON CONFLICT(machine) DO UPDATE SET host=excluded.host,
+		   last_seq=excluded.last_seq, updated_at=excluded.updated_at`,
+		machine, host, seq, time.Now().UnixMilli())
+	return err
+}
+
 func boolInt(b bool) int {
 	if b {
 		return 1
@@ -136,18 +255,22 @@ func boolInt(b bool) int {
 
 func scanCmd(rows *sql.Rows) (Command, error) {
 	var c Command
-	var st, en sql.NullInt64
-	err := rows.Scan(&c.ID, &c.SessionID, &c.Cmd, &c.Cwd, &c.ExitCode, &st, &en, &c.OutputLen, &c.Truncated)
+	var st, en, oseq sql.NullInt64
+	err := rows.Scan(&c.ID, &c.SessionID, &c.Cmd, &c.Cwd, &c.ExitCode, &st, &en, &c.OutputLen, &c.Truncated,
+		&c.Machine, &c.Host, &oseq)
 	if st.Valid {
 		c.StartedAt = time.UnixMilli(st.Int64)
 	}
 	if en.Valid {
 		c.EndedAt = time.UnixMilli(en.Int64)
 	}
+	if oseq.Valid {
+		c.OriginSeq = oseq.Int64
+	}
 	return c, err
 }
 
-const cmdCols = `id, session_id, cmd, coalesce(cwd,''), exit_code, started_at, ended_at, output_bytes, truncated`
+const cmdCols = `id, session_id, cmd, coalesce(cwd,''), exit_code, started_at, ended_at, output_bytes, truncated, coalesce(machine,''), coalesce(host,''), origin_seq`
 
 // Filter narrows List/Search results. Zero values mean "no filter".
 type Filter struct {
@@ -157,6 +280,7 @@ type Filter struct {
 	ExitSet bool      // Exit is meaningful (allows filtering on 0)
 	Failed  bool      // only nonzero exit codes
 	Since   time.Time // non-zero: only commands started at/after this time
+	Host    string    // non-empty: only this origin host; "local" = this machine
 	Limit   int       // <=0: default 20
 }
 
@@ -182,6 +306,14 @@ func (f Filter) where(tbl string) (string, []any) {
 	if !f.Since.IsZero() {
 		conds = append(conds, tbl+`started_at>=?`)
 		args = append(args, f.Since.UnixMilli())
+	}
+	if f.Host != "" {
+		if f.Host == "local" {
+			conds = append(conds, tbl+`machine IS NULL`)
+		} else {
+			conds = append(conds, tbl+`host=?`)
+			args = append(args, f.Host)
+		}
 	}
 	if len(conds) == 0 {
 		return "", nil
@@ -239,9 +371,10 @@ func (s *Store) Get(n int64) (*Command, error) {
 	}
 	row := s.db.QueryRow(q, arg)
 	var c Command
-	var st, en sql.NullInt64
+	var st, en, oseq sql.NullInt64
 	var blob []byte
-	err := row.Scan(&c.ID, &c.SessionID, &c.Cmd, &c.Cwd, &c.ExitCode, &st, &en, &c.OutputLen, &c.Truncated, &blob)
+	err := row.Scan(&c.ID, &c.SessionID, &c.Cmd, &c.Cwd, &c.ExitCode, &st, &en, &c.OutputLen, &c.Truncated,
+		&c.Machine, &c.Host, &oseq, &blob)
 	if err != nil {
 		return nil, err
 	}
@@ -250,6 +383,9 @@ func (s *Store) Get(n int64) (*Command, error) {
 	}
 	if en.Valid {
 		c.EndedAt = time.UnixMilli(en.Int64)
+	}
+	if oseq.Valid {
+		c.OriginSeq = oseq.Int64
 	}
 	if len(blob) > 0 {
 		c.Output, err = s.dec.DecodeAll(blob, nil)
@@ -270,7 +406,7 @@ func (s *Store) Search(query string, f Filter) ([]Command, error) {
 	args = append(args, f.limit())
 	rows, err := s.db.Query(`
 		SELECT c.id, c.session_id, c.cmd, coalesce(c.cwd,''), c.exit_code, c.started_at, c.ended_at,
-		       c.output_bytes, c.truncated,
+		       c.output_bytes, c.truncated, coalesce(c.machine,''), coalesce(c.host,''), c.origin_seq,
 		       snippet(commands_fts, 1, char(27)||'[1;31m', char(27)||'[0m', '…', 12)
 		FROM commands_fts JOIN commands c ON c.id = commands_fts.rowid
 		WHERE commands_fts MATCH ?`+extra+`
@@ -282,9 +418,9 @@ func (s *Store) Search(query string, f Filter) ([]Command, error) {
 	var out []Command
 	for rows.Next() {
 		var c Command
-		var st, en sql.NullInt64
+		var st, en, oseq sql.NullInt64
 		if err := rows.Scan(&c.ID, &c.SessionID, &c.Cmd, &c.Cwd, &c.ExitCode, &st, &en,
-			&c.OutputLen, &c.Truncated, &c.Snippet); err != nil {
+			&c.OutputLen, &c.Truncated, &c.Machine, &c.Host, &oseq, &c.Snippet); err != nil {
 			return nil, err
 		}
 		if st.Valid {
@@ -292,6 +428,9 @@ func (s *Store) Search(query string, f Filter) ([]Command, error) {
 		}
 		if en.Valid {
 			c.EndedAt = time.UnixMilli(en.Int64)
+		}
+		if oseq.Valid {
+			c.OriginSeq = oseq.Int64
 		}
 		out = append(out, c)
 	}
