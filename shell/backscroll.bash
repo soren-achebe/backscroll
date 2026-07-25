@@ -41,18 +41,20 @@ _backscroll_complete() {
   local cur=${COMP_WORDS[COMP_CWORD]}
   local prev=${COMP_WORDS[COMP_CWORD-1]:-}
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "run init list last show search diff export stats prune delete redact off on doctor version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "run init list last show search pick diff export stats prune delete redact off on doctor version help" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "init" ]; then
-    COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
+    COMPREPLY=($(compgen -W "bash zsh fish tmux" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "export" ] && { [ "$prev" = "--format" ] || [ "$prev" = "-format" ]; }; then
     COMPREPLY=($(compgen -W "md cast json" -- "$cur"))
-  elif [ "${COMP_WORDS[1]}" = "list" ] || [ "${COMP_WORDS[1]}" = "last" ] || [ "${COMP_WORDS[1]}" = "search" ]; then
+  elif [ "${COMP_WORDS[1]}" = "list" ] || [ "${COMP_WORDS[1]}" = "last" ] || [ "${COMP_WORDS[1]}" = "search" ] || [ "${COMP_WORDS[1]}" = "pick" ]; then
     case "$prev" in
       --exit|-exit) COMPREPLY=($(compgen -W "fail 0 1 2" -- "$cur")) ;;
       --cwd|-cwd)   COMPREPLY=($(compgen -d -- "$cur")) ;;
       --since|-since|--session|-session|-n) ;;
       *) case "$cur" in
-           -*) COMPREPLY=($(compgen -W "-n --session --cwd --exit --since" -- "$cur")) ;;
+           -*) local _bs_flags="-n --session --cwd --exit --since"
+               [ "${COMP_WORDS[1]}" = "pick" ] && _bs_flags="$_bs_flags --pager --raw --print-id --print-cmd --redact"
+               COMPREPLY=($(compgen -W "$_bs_flags" -- "$cur")) ;;
          esac ;;
     esac
   fi

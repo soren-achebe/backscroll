@@ -23,11 +23,14 @@ end
 
 # Tab completion (active in and out of recorded sessions).
 complete -c backscroll -f
-complete -c backscroll -n __fish_use_subcommand -a "run init list last show search diff export stats prune delete redact off on doctor version help"
-complete -c backscroll -n "__fish_seen_subcommand_from init" -a "bash zsh fish"
+complete -c backscroll -n __fish_use_subcommand -a "run init list last show search pick diff export stats prune delete redact off on doctor version help"
+complete -c backscroll -n "__fish_seen_subcommand_from init" -a "bash zsh fish tmux"
 complete -c backscroll -n "__fish_seen_subcommand_from export" -l format -a "md cast json"
-complete -c backscroll -n "__fish_seen_subcommand_from list last search" -s n -d "max results" -x
-complete -c backscroll -n "__fish_seen_subcommand_from list last search" -l session -d "only this session id" -x
-complete -c backscroll -n "__fish_seen_subcommand_from list last search" -l cwd -d "only this dir (or beneath)" -r -a "(__fish_complete_directories)"
-complete -c backscroll -n "__fish_seen_subcommand_from list last search" -l exit -d "only this exit code" -x -a "fail 0 1 2"
-complete -c backscroll -n "__fish_seen_subcommand_from list last search" -l since -d "only newer than (2h, 3d, 1w, date)" -x
+complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -s n -d "max results" -x
+complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -l session -d "only this session id" -x
+complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -l cwd -d "only this dir (or beneath)" -r -a "(__fish_complete_directories)"
+complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -l exit -d "only this exit code" -x -a "fail 0 1 2"
+complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -l since -d "only newer than (2h, 3d, 1w, date)" -x
+complete -c backscroll -n "__fish_seen_subcommand_from pick" -l pager -d "view output in a pager"
+complete -c backscroll -n "__fish_seen_subcommand_from pick" -l print-id -d "print only the selected id"
+complete -c backscroll -n "__fish_seen_subcommand_from pick" -l print-cmd -d "print only the command line"

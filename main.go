@@ -51,6 +51,9 @@ var bashInit string
 //go:embed shell/backscroll.fish
 var fishInit string
 
+//go:embed shell/backscroll.tmux
+var tmuxInit string
+
 const usage = `backscroll — never lose a command's output again
 
 Usage:
@@ -66,6 +69,10 @@ Usage:
   backscroll last [-n N]         alias for list
   backscroll search <query>      full-text search over commands + outputs
                                  (same filters as list: --cwd --exit --since)
+  backscroll pick [query]        interactive fuzzy picker (needs fzf) with
+                                 live output preview; enter = view output.
+                                 --pager for tmux popups, --print-id,
+                                 --print-cmd; same filters as list
   backscroll diff <a> [b]        diff two stored outputs (ids or -N offsets);
                                  with one arg, diffs against the previous run
                                  of the same command ("what changed?")
@@ -109,6 +116,8 @@ func main() {
 		err = cmdShow(args)
 	case "search":
 		err = cmdSearch(args)
+	case "pick":
+		err = cmdPick(args)
 	case "diff":
 		err = cmdDiff(args)
 	case "export":
@@ -164,7 +173,7 @@ func cmdRun(args []string) error {
 
 func cmdInit(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: backscroll init <bash|zsh>")
+		return fmt.Errorf("usage: backscroll init <bash|zsh|fish|tmux>")
 	}
 	switch args[0] {
 	case "zsh":
@@ -173,8 +182,10 @@ func cmdInit(args []string) error {
 		fmt.Print(bashInit)
 	case "fish":
 		fmt.Print(fishInit)
+	case "tmux":
+		fmt.Print(tmuxInit)
 	default:
-		return fmt.Errorf("unsupported shell %q (bash, zsh, fish)", args[0])
+		return fmt.Errorf("unsupported target %q (bash, zsh, fish, tmux)", args[0])
 	}
 	return nil
 }

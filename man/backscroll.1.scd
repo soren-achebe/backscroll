@@ -43,9 +43,10 @@ Run *backscroll doctor* to verify the setup.
 	shell so that bash reads _~/.bashrc_; pass *--login* for login-shell
 	semantics (note that a login bash does not read _~/.bashrc_).
 
-*init* <*bash*|*zsh*|*fish*>
+*init* <*bash*|*zsh*|*fish*|*tmux*>
 	Print the shell-integration snippet (OSC 133 marks, cwd reporting, and
-	tab completion) for the given shell.
+	tab completion) for the given shell, or a tmux popup key-binding
+	snippet for _~/.tmux.conf_.
 
 *list* [*-n* _N_] [_filters_]
 	List recent commands. Aliased as *last*.
@@ -58,6 +59,13 @@ Run *backscroll doctor* to verify the setup.
 *search* _query_ [_filters_] [*--redact*]
 	Full-text search (SQLite FTS5, case-insensitive substring) over both
 	command lines and outputs.
+
+*pick* [_query_] [_filters_] [*--pager*] [*--raw*] [*--print-id*] [*--print-cmd*] [*--redact*]
+	Interactive fuzzy picker over recorded commands (requires *fzf*(1))
+	with a live preview of each command's stored output. Enter prints the
+	selected output; *--pager* views it in _$PAGER_ (default *less -R*) -
+	the right mode for a tmux popup (see *init tmux*). *--print-id* /
+	*--print-cmd* print only the id / command line, for scripting.
 
 *diff* _a_ [_b_] [*-U* _N_]
 	Line-diff two stored outputs (ids or -N offsets). With a single
@@ -90,7 +98,7 @@ Run *backscroll doctor* to verify the setup.
 
 # FILTERS
 
-*list* and *search* accept:
+*list*, *search*, and *pick* accept:
 
 *--cwd* _DIR_
 	Only commands launched in _DIR_ or beneath it.

@@ -57,10 +57,11 @@ shell so that bash reads \fI~/.\&bashrc\fR; pass \fB--login\fR for login-shell
 semantics (note that a login bash does not read \fI~/.\&bashrc\fR).\&
 .P
 .RE
-\fBinit\fR <\fBbash\fR|\fBzsh\fR|\fBfish\fR>
+\fBinit\fR <\fBbash\fR|\fBzsh\fR|\fBfish\fR|\fBtmux\fR>
 .RS 4
 Print the shell-integration snippet (OSC 133 marks, cwd reporting, and
-tab completion) for the given shell.\&
+tab completion) for the given shell, or a tmux popup key-binding
+snippet for \fI~/.\&tmux.\&conf\fR.\&
 .P
 .RE
 \fBlist\fR [\fB-n\fR \fIN\fR] [\fIfilters\fR]
@@ -79,6 +80,15 @@ colors; the default strips ANSI escapes.\&
 .RS 4
 Full-text search (SQLite FTS5, case-insensitive substring) over both
 command lines and outputs.\&
+.P
+.RE
+\fBpick\fR [\fIquery\fR] [\fIfilters\fR] [\fB--pager\fR] [\fB--raw\fR] [\fB--print-id\fR] [\fB--print-cmd\fR] [\fB--redact\fR]
+.RS 4
+Interactive fuzzy picker over recorded commands (requires \fBfzf\fR(1))
+with a live preview of each command'\&s stored output.\& Enter prints the
+selected output; \fB--pager\fR views it in \fI$PAGER\fR (default \fBless -R\fR) -
+the right mode for a tmux popup (see \fBinit tmux\fR).\& \fB--print-id\fR /
+\fB--print-cmd\fR print only the id / command line, for scripting.\&
 .P
 .RE
 \fBdiff\fR \fIa\fR [\fIb\fR] [\fB-U\fR \fIN\fR]
@@ -128,7 +138,7 @@ correctly.\&
 .RE
 .SH FILTERS
 .P
-\fBlist\fR and \fBsearch\fR accept:
+\fBlist\fR, \fBsearch\fR, and \fBpick\fR accept:
 .P
 \fB--cwd\fR \fIDIR\fR
 .RS 4

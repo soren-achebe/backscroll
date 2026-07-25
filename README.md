@@ -136,6 +136,7 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 | `backscroll show -3` | third-most-recent command |
 | `backscroll show 3141` | by id · `--raw` keeps colors |
 | `backscroll search <text>` | full-text search commands + outputs |
+| `backscroll pick` | fuzzy-pick a command (fzf) with live output preview |
 | `backscroll list -n 50` | recent commands with exit/duration/size |
 | `... --exit fail --since 2h` | list/search filters: failures only, last 2 hours |
 | `... --cwd .` | only commands run in this directory (or beneath it) |
@@ -166,6 +167,11 @@ just decide which side of tmux you want it on:
   useful: tmux redraws the whole screen, so per-command segmentation
   is lost. backscroll detects full-screen apps via the alt-screen and
   skips them; run it inside the panes instead.
+- **Popup search (tmux ≥ 3.2 + [fzf](https://github.com/junegunn/fzf)):**
+  `backscroll init tmux >> ~/.tmux.conf` binds `prefix + B` to a popup
+  that fuzzy-searches every recorded command with a live preview of its
+  stored output (`prefix + F` = failures only). Any pane, any time —
+  enter pages through the full output, `q` back to work.
 - **Over SSH:** backscroll records on whichever machine the shell runs.
   Install it on the remote host and add the rc snippet there; your
   laptop's DB and the server's DB stay separate (cross-machine sync is
