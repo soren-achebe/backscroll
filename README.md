@@ -109,6 +109,11 @@ Release tarballs include a man page (`man/backscroll.1`; source is
    [[ -z "$BACKSCROLL_ACTIVE" ]] && command -v backscroll >/dev/null && exec backscroll run
    ```
 
+   > `backscroll run` starts a plain interactive shell — so bash reads
+   > `~/.bashrc` and picks up the snippet. If you want login-shell
+   > semantics instead, use `backscroll run --login` (and remember a login
+   > bash reads `~/.bash_profile`, *not* `~/.bashrc`).
+
 ## Use
 
 | command | what it does |

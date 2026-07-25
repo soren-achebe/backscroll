@@ -36,10 +36,12 @@ Run *backscroll doctor* to verify the setup.
 
 # COMMANDS
 
-*run* [*--head-cap* _N_] [*--tail-cap* _N_]
+*run* [*--head-cap* _N_] [*--tail-cap* _N_] [*-l*|*--login*]
 	Start a recorded shell session ($SHELL on a PTY). Outputs larger than
 	the caps keep the first _head-cap_ (default 256 KiB) and last
-	_tail-cap_ (default 1 MiB) bytes.
+	_tail-cap_ (default 1 MiB) bytes. The shell is a plain interactive
+	shell so that bash reads _~/.bashrc_; pass *--login* for login-shell
+	semantics (note that a login bash does not read _~/.bashrc_).
 
 *init* <*bash*|*zsh*|*fish*>
 	Print the shell-integration snippet (OSC 133 marks, cwd reporting, and

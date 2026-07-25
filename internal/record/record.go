@@ -88,7 +88,7 @@ func (c *capBuf) Bytes() []byte {
 
 // Run spawns the user's shell on a PTY, proxies all IO untouched, and
 // records per-command output segments to the store.
-func Run(st *store.Store, headCap, tailCap int) error {
+func Run(st *store.Store, headCap, tailCap int, login bool) error {
 	if os.Getenv("BACKSCROLL_ACTIVE") != "" {
 		return fmt.Errorf("already inside a backscroll session")
 	}
@@ -102,7 +102,15 @@ func Run(st *store.Store, headCap, tailCap int) error {
 		return err
 	}
 
-	cmd := exec.Command(shell, "-l")
+	// Plain interactive shell by default: an interactive non-login bash
+	// reads ~/.bashrc, which is where the README tells users to put the
+	// integration snippet. A login bash would skip it (silent no-record).
+	var cmd *exec.Cmd
+	if login {
+		cmd = exec.Command(shell, "-l")
+	} else {
+		cmd = exec.Command(shell)
+	}
 	cmd.Env = append(os.Environ(),
 		"BACKSCROLL_ACTIVE=1",
 		fmt.Sprintf("BACKSCROLL_SESSION=%d", sessID),

@@ -5,7 +5,7 @@
 .nh
 .ad l
 .\" Begin generated content:
-.TH "backscroll" "1" "2026-07-22"
+.TH "backscroll" "1" "2026-07-25"
 .P
 .SH NAME
 .P
@@ -48,11 +48,13 @@ Run \fBbackscroll doctor\fR to verify the setup.\&
 .P
 .SH COMMANDS
 .P
-\fBrun\fR [\fB--head-cap\fR \fIN\fR] [\fB--tail-cap\fR \fIN\fR]
+\fBrun\fR [\fB--head-cap\fR \fIN\fR] [\fB--tail-cap\fR \fIN\fR] [\fB-l\fR|\fB--login\fR]
 .RS 4
 Start a recorded shell session ($SHELL on a PTY).\& Outputs larger than
 the caps keep the first \fIhead-cap\fR (default 256 KiB) and last
-\fItail-cap\fR (default 1 MiB) bytes.\&
+\fItail-cap\fR (default 1 MiB) bytes.\& The shell is a plain interactive
+shell so that bash reads \fI~/.\&bashrc\fR; pass \fB--login\fR for login-shell
+semantics (note that a login bash does not read \fI~/.\&bashrc\fR).\&
 .P
 .RE
 \fBinit\fR <\fBbash\fR|\fBzsh\fR|\fBfish\fR>

@@ -145,13 +145,15 @@ func cmdRun(args []string) error {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	head := fs.Int("head-cap", 256<<10, "max bytes kept from start of each command's output")
 	tail := fs.Int("tail-cap", 1<<20, "max bytes kept from end of each command's output")
+	login := fs.Bool("login", false, "spawn the shell as a login shell (note: a login bash does not read ~/.bashrc)")
+	fs.BoolVar(login, "l", *login, "shorthand for --login")
 	fs.Parse(args)
 	st, err := openStore()
 	if err != nil {
 		return err
 	}
 	defer st.Close()
-	err = record.Run(st, *head, *tail)
+	err = record.Run(st, *head, *tail, *login)
 	var ee *exec.ExitError
 	if errors.As(err, &ee) {
 		st.Close()
