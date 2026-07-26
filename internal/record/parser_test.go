@@ -284,3 +284,95 @@ func TestNativePlusSnippetDoubleEmission(t *testing.T) {
 		t.Fatalf("marks leaked into output: %q", c.outs[0])
 	}
 }
+
+// --- OSC 633 (VS Code shell integration) ---
+
+func TestOSC633Segmentation(t *testing.T) {
+	p, c := collector()
+	// Realistic VS Code bash stream: A/B prompt marks, E (cmdline+nonce),
+	// C, output, D;status, P;Cwd.
+	stream := osc("633;A") + "prompt$ " + osc("633;B") +
+		osc("633;E;echo hi;a1b2") + osc("633;C") + "hi\r\n" +
+		osc("633;D;0") + osc("633;P;Cwd=/home/x") + osc("633;A")
+	p.Feed([]byte(stream))
+	if len(c.hints) != 1 || c.hints[0] != "echo hi" {
+		t.Fatalf("hints = %v", c.hints)
+	}
+	if len(c.outs) != 1 || c.outs[0] != "hi\r\n" {
+		t.Fatalf("outs = %q", c.outs)
+	}
+	if c.exits[0] != 0 {
+		t.Fatalf("exit = %v", c.exits)
+	}
+	if len(c.cwds) != 1 || c.cwds[0] != "/home/x" {
+		t.Fatalf("cwds = %v", c.cwds)
+	}
+}
+
+func TestOSC633EUnescape(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{`echo hi`, "echo hi"},
+		{`echo a\x3b b`, "echo a; b"},           // escaped semicolon
+		{`printf '%s\\n' x`, `printf '%s\n' x`}, // escaped backslash
+		{`line1\x0aline2`, "line1\nline2"},      // multiline command
+		{`tab\x09sep`, "tab\tsep"},              // control byte
+		{`trailing\`, `trailing\`},              // malformed: lone backslash
+		{`bad\xZZesc`, `bad\xZZesc`},            // malformed: non-hex
+	}
+	for _, tc := range cases {
+		p, c := collector()
+		p.Feed([]byte(osc("633;E;" + tc.in + ";nonce")))
+		if len(c.hints) != 1 || c.hints[0] != tc.want {
+			t.Errorf("E;%q: hints = %q, want [%q]", tc.in, c.hints, tc.want)
+		}
+	}
+	// No nonce at all: whole params section is the command.
+	p, c := collector()
+	p.Feed([]byte(osc("633;E;justcmd")))
+	if len(c.hints) != 1 || c.hints[0] != "justcmd" {
+		t.Fatalf("no-nonce hints = %v", c.hints)
+	}
+}
+
+func TestOSC633ConsumedNotSpliced(t *testing.T) {
+	// 633 sequences arriving mid-capture (e.g. a nested integrated shell)
+	// must never end up in the recorded output.
+	p, c := collector()
+	stream := mark("bash") + "before" +
+		osc("633;P;PromptType=starship") + osc("633;B") + osc("633;F") +
+		"after" + osc("133;D;0")
+	p.Feed([]byte(stream))
+	if len(c.outs) != 1 || c.outs[0] != "beforeafter" {
+		t.Fatalf("outs = %q", c.outs)
+	}
+}
+
+func TestOSC633SnippetPrecedence(t *testing.T) {
+	// Both our snippet (6973+133) and VS Code's integration (633) active:
+	// authoritative 6973 text arrives alongside the 633 E hint; dup C/D
+	// marks must not produce extra segments.
+	p, c := collector()
+	stream := osc("633;E;echo hi;n") + osc("633;C") + // vsc preexec first
+		mark("echo hi") + // our preexec: 6973 + 133;C (resets buf, pre-output)
+		"hi\r\n" + osc("133;D;0") + osc("633;D;0")
+	p.Feed([]byte(stream))
+	if len(c.cmds) != 1 || c.cmds[0] != "echo hi" {
+		t.Fatalf("cmds = %v", c.cmds)
+	}
+	if len(c.hints) != 1 {
+		t.Fatalf("hints = %v", c.hints)
+	}
+	if len(c.outs) != 1 || c.outs[0] != "hi\r\n" {
+		t.Fatalf("outs = %q (dup D must not double-flush)", c.outs)
+	}
+}
+
+func TestOSC633EmptyPromptDIgnored(t *testing.T) {
+	// VS Code emits a bare 633;D (no status) for an empty-prompt Enter;
+	// with no preceding C it must be ignored.
+	p, c := collector()
+	p.Feed([]byte(osc("633;A") + "$ " + osc("633;B") + osc("633;D") + osc("633;A")))
+	if len(c.outs) != 0 {
+		t.Fatalf("outs = %q", c.outs)
+	}
+}

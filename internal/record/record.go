@@ -211,6 +211,16 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 			return
 		}
 		raw := buf.Bytes()
+		if name == "" && !hasExit && len(raw) == 0 {
+			// Phantom prompt cycle: no command text, no output, no exit
+			// code. VS Code's bash integration emits E;; + C + bare D when
+			// Ctrl-C is pressed at an empty prompt (the PROMPT_COMMAND
+			// re-fire quirk); nothing real ran, so store nothing. A real
+			// command always has at least one of the three.
+			buf = nil
+			curCmd, curHint = "", ""
+			return
+		}
 		plain := ansi.Strip(raw)
 		if name == "" {
 			name = "(unknown command)"

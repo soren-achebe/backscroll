@@ -151,17 +151,40 @@ func (p *Parser) handleCSI(seq string) {
 	}
 }
 
+// markC handles a pre-execution mark (OSC 133;C / 633;C): output begins.
+func (p *Parser) markC() {
+	p.capturing = true
+	p.altScreen = false
+	if p.ev.OutStart != nil {
+		p.ev.OutStart()
+	}
+}
+
+// markD handles a command-finished mark (OSC 133;D / 633;D), rest is the
+// payload after "133;"/"633;" (i.e. "D" or "D;<code>[;...]").
+func (p *Parser) markD(rest string) {
+	if !p.capturing {
+		return
+	}
+	p.capturing = false
+	code, ok := 0, false
+	if strings.HasPrefix(rest, "D;") {
+		if n, err := strconv.Atoi(strings.SplitN(rest[2:], ";", 2)[0]); err == nil {
+			code, ok = n, true
+		}
+	}
+	if p.ev.OutEnd != nil {
+		p.ev.OutEnd(code, ok)
+	}
+}
+
 func (p *Parser) handleOSC(payload string, out *[]byte) {
 	switch {
 	case strings.HasPrefix(payload, "133;"):
 		rest := payload[4:]
 		switch {
 		case rest == "C" || strings.HasPrefix(rest, "C;"):
-			p.capturing = true
-			p.altScreen = false
-			if p.ev.OutStart != nil {
-				p.ev.OutStart()
-			}
+			p.markC()
 			// Some emitters (fish ≥4.0, following the kitty shell-
 			// integration protocol) attach the command line itself as a
 			// percent-encoded C-mark parameter. Surface it as a hint so
@@ -174,20 +197,44 @@ func (p *Parser) handleOSC(payload string, out *[]byte) {
 				}
 			}
 		case rest == "D" || strings.HasPrefix(rest, "D;"):
-			if p.capturing {
-				p.capturing = false
-				code, ok := 0, false
-				if strings.HasPrefix(rest, "D;") {
-					if n, err := strconv.Atoi(strings.SplitN(rest[2:], ";", 2)[0]); err == nil {
-						code, ok = n, true
-					}
-				}
-				if p.ev.OutEnd != nil {
-					p.ev.OutEnd(code, ok)
-				}
-			}
+			p.markD(rest)
 		}
 		// A and B marks are prompt boundaries; nothing to capture there.
+	case strings.HasPrefix(payload, "633;"):
+		// VS Code's shell-integration protocol (OSC 633) — same A/B/C/D
+		// shape as OSC 133, plus E (the literal command line) and
+		// P;Cwd=<path>. Emitted by VS Code's shellIntegration-{bash,zsh,
+		// fish}.sh, which users install manually in rc files for tmux/SSH
+		// setups — so a shell inside `backscroll run` can be emitting
+		// these with no backscroll snippet at all. All 633 sequences are
+		// consumed (never spliced into recorded output): they are
+		// host-terminal metadata, and replaying them would confuse the
+		// host's own shell-integration state.
+		rest := payload[4:]
+		switch {
+		case rest == "C" || strings.HasPrefix(rest, "C;"):
+			p.markC()
+		case rest == "D" || strings.HasPrefix(rest, "D;"):
+			p.markD(rest)
+		case strings.HasPrefix(rest, "E;"):
+			// 633;E;<cmdline>;<nonce> — nonce is optional; semicolons
+			// inside the command are escaped as \x3b, so splitting on the
+			// last raw ';' is safe.
+			if p.ev.CmdHint != nil {
+				params := rest[2:]
+				cmd := params
+				if i := strings.LastIndexByte(params, ';'); i >= 0 {
+					cmd = params[:i]
+				}
+				p.ev.CmdHint(vscUnescape(cmd))
+			}
+		case strings.HasPrefix(rest, "P;Cwd="):
+			if p.ev.Cwd != nil {
+				p.ev.Cwd(vscUnescape(rest[len("P;Cwd="):]))
+			}
+		}
+		// A/B/F/G/P;*/Env* etc.: prompt boundaries and terminal metadata;
+		// nothing to capture.
 	case strings.HasPrefix(payload, "6973;cmd="):
 		if raw, err := base64.StdEncoding.DecodeString(payload[len("6973;cmd="):]); err == nil {
 			if p.ev.CmdText != nil {
@@ -232,6 +279,34 @@ func percentDecode(s string) string {
 				b.WriteByte(byte(n))
 				i += 2
 				continue
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+// vscUnescape undoes VS Code's OSC 633 value escaping: `\\` for backslash
+// and `\xHH` for semicolons (`\x3b`) and control bytes (e.g. `\x0a` in
+// multiline commands). Malformed escapes are left as-is.
+func vscUnescape(s string) string {
+	if !strings.Contains(s, `\`) {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			if s[i+1] == '\\' {
+				b.WriteByte('\\')
+				i++
+				continue
+			}
+			if s[i+1] == 'x' && i+3 < len(s) {
+				if n, err := strconv.ParseUint(s[i+2:i+4], 16, 8); err == nil {
+					b.WriteByte(byte(n))
+					i += 3
+					continue
+				}
 			}
 		}
 		b.WriteByte(s[i])

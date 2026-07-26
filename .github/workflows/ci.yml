@@ -42,6 +42,17 @@ jobs:
           fi
           BKS_BIN="$PWD/backscroll" BKS_TEST_FISH4="$HOME/.cache/fish-4.8.1/fish" \
             python3 shell/test_fish4_native.py
+      - name: E2E test against VS Code shell integration (OSC 633, zero-config)
+        if: runner.os == 'Linux'
+        run: |
+          # Pinned to a vscode main commit; MIT-licensed script, fetched for
+          # testing only (not vendored). Update SHA+checksum together.
+          VSC_SHA=3460bdb15c72c1586ba5d74ce1e91df179e74215
+          VSC_SUM=9d9b20908b971e89d6c07eb22ebad5fafb07ae734b037784e2bdaf7be7ec3ee7
+          curl -sL -o /tmp/vsc-bash.sh "https://raw.githubusercontent.com/microsoft/vscode/$VSC_SHA/src/vs/workbench/contrib/terminal/common/scripts/shellIntegration-bash.sh"
+          echo "$VSC_SUM  /tmp/vsc-bash.sh" | sha256sum -c -
+          BKS_BIN="$PWD/backscroll" BKS_TEST_VSC_SH=/tmp/vsc-bash.sh \
+            python3 shell/test_vscode_633.py
       - name: cache bash 3.2.57
         if: runner.os == 'Linux'
         uses: actions/cache@v4

@@ -118,6 +118,13 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 > still worth adding for the Ctrl-X Ctrl-P picker binding and tab
 > completion; having both active is fine (duplicate marks collapse).
 
+> **VS Code shell integration in your rc file?** Also zero-config: if
+> your shell sources VS Code's `shellIntegration-*.sh` (the
+> [manual install](https://code.visualstudio.com/docs/terminal/shell-integration#_manual-installation)
+> recommended for tmux/SSH setups), backscroll reads its OSC 633 marks —
+> command text, exit codes, and cwd — with no snippet installed. The 633
+> metadata is consumed, never stored into recorded output.
+
 1. Add the integration to your shell rc (inert outside recorded sessions):
 
    ```sh
