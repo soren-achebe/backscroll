@@ -747,3 +747,45 @@ func TestEchoRegion633(t *testing.T) {
 		t.Fatalf("recon = %q", got)
 	}
 }
+
+func TestEchoRegionPS2ContinuesAKS(t *testing.T) {
+	// iTerm2 wraps PS2 in 133;A;k=s (Semantic Prompt secondary) where
+	// kitty uses P;k=s — the region must continue, not reset, and the
+	// marked PS2 text is excluded. Params ride on every iTerm2 mark.
+	p, _, echoes := echoCollector()
+	p.Feed([]byte(osc("133;A;aid=42-1") + "$ " + osc("133;B;aid=42-1") +
+		"echo 'a\r\n" + osc("133;A;k=s;aid=42-1") + "quote> " +
+		osc("133;B;aid=42-1") + "b'\r\n" +
+		// iTerm2 puts a literal \r inside the C mark's OSC body when
+		// TERM_PROGRAM=iTerm.app — must still be recognized as a C
+		osc("133;C;aid=42-1\r") + osc("133;D;0;aid=42-1")))
+	want := "echo 'a\nb'"
+	if got := recon(*echoes); len(got) != 1 || got[0] != want {
+		t.Fatalf("recon = %q, want %q", got, want)
+	}
+}
+
+func TestITerm2CurrentDirAndMetadataConsumed(t *testing.T) {
+	// 1337;CurrentDir=<raw path> feeds cwd; RemoteHost and
+	// ShellIntegrationVersion are host-directed metadata — none of the
+	// three may land in stored output (show --raw must not replay them).
+	var cwd string
+	var out []byte
+	p := NewParser(Events{
+		Cwd:      func(s string) { cwd = s },
+		OutStart: func() {},
+		Output:   func(b []byte) { out = append(out, b...) },
+		OutEnd:   func(int, bool) {},
+	})
+	p.Feed([]byte(osc("133;C") +
+		osc("1337;RemoteHost=user@host.example") +
+		osc("1337;CurrentDir=/home/user/some dir") +
+		osc("1337;ShellIntegrationVersion=20;shell=bash") +
+		"real output\r\n" + osc("133;D;0")))
+	if cwd != "/home/user/some dir" {
+		t.Fatalf("cwd = %q", cwd)
+	}
+	if s := string(out); strings.Contains(s, "1337") || !strings.Contains(s, "real output") {
+		t.Fatalf("stored output = %q", s)
+	}
+}
