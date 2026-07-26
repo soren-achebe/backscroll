@@ -224,30 +224,35 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 		}
 		raw := buf.Bytes()
 		plain := ansi.Strip(raw)
-		if name == "" && (!hasExit || exitCode == 0) {
-			// No command text and no exit code (or a success exit):
-			// only worth keeping if there is real (non-metadata) output.
+		if name == "" {
+			// No command text: only worth keeping if there is real
+			// (non-metadata) output.
 			if len(plain) == 0 {
-				// Phantom prompt cycle. VS Code's bash integration emits
-				// E;; + C + bare D when Ctrl-C is pressed at an empty
-				// prompt (the PROMPT_COMMAND re-fire quirk); Ghostty's
-				// zsh integration opens a C for `exit` whose only bytes
-				// are an OSC 2 title + cursor-shape escape; iTerm2's
-				// bash integration fires a stray preexec C while the rc
-				// file is still being sourced (pre-first-prompt, so no
-				// A/B and no typed input), which the first prompt's
-				// D;0 closes into an empty exit-0 stub. Nothing real
-				// ran, so store nothing. Compared ANSI-stripped: pure
+				// Phantom prompt cycle — dropped regardless of exit
+				// code. VS Code's bash integration emits E;; + C + bare
+				// D when Ctrl-C is pressed at an empty prompt (the
+				// PROMPT_COMMAND re-fire quirk); Ghostty's zsh
+				// integration opens a C for `exit` whose only bytes are
+				// an OSC 2 title + cursor-shape escape; iTerm2's bash
+				// integration fires a stray preexec C while the rc file
+				// is still being sourced (closed by the first prompt's
+				// D;0), and — by design — closes EVERY prompt cycle
+				// with C..D, so empty Enter and Ctrl-C at the prompt
+				// arrive as empty cycles whose D carries the previous
+				// command's stale $? (1, 130, ...). Nothing real ran,
+				// so store nothing. Compared ANSI-stripped: pure
 				// escape-sequence traffic is terminal metadata, not
 				// output. A real command always leaves text, an exit
-				// code, or command text. (A *failing* exit code is kept
-				// even without text or output — `list --exit fail` should
-				// surface it.)
+				// code with output, or reconstructable command text —
+				// the only loss is a command that both defeated echo
+				// reconstruction AND printed nothing, under an emitter
+				// with no A/B marks.
 				buf = nil
 				curCmd, curHint, curEcho = "", "", ""
 				return
 			}
-			if t := strings.TrimSpace(string(plain)); t == "exit" || t == "logout" {
+			if t := strings.TrimSpace(string(plain)); (!hasExit || exitCode == 0) &&
+				(t == "exit" || t == "logout") {
 				// Session teardown echoed by the shell itself: bash
 				// prints "exit" when the shell terminates. Without a
 				// cmdline-providing emitter there is no name to trip
