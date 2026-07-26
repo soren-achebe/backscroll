@@ -129,7 +129,7 @@ _backscroll_complete() {
   local cur=${COMP_WORDS[COMP_CWORD]}
   local prev=${COMP_WORDS[COMP_CWORD-1]:-}
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "run init list last show search pick diff export sync stats prune delete redact off on doctor version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "run init list last show search pick diff export sync stats prune delete redact mcp off on doctor version help" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "init" ]; then
     COMPREPLY=($(compgen -W "bash zsh fish tmux" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "export" ] && { [ "$prev" = "--format" ] || [ "$prev" = "-format" ]; }; then

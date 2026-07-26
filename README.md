@@ -203,6 +203,7 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 | `backscroll prune --older 30d` | forget old entries |
 | `backscroll delete <id>` | forget one entry (that `curl -H "Authorization: ..."`) |
 | `backscroll redact <id\|-N>` | permanently mask tokens/keys/passwords in a stored entry (`--dry-run` previews) |
+| `backscroll mcp` | MCP server: let your AI coding agent query your history ([details](#ai-agents-mcp)) |
 | `backscroll off` / `on` | pause / resume recording in this session |
 | `backscroll doctor` | check that everything is wired up |
 
@@ -270,6 +271,38 @@ patterns skip entries entirely, and only the searchable plain text is
 shipped — raw terminal bytes (`show --raw` replays) never leave the machine
 that recorded them. `backscroll sync status` shows per-machine progress and
 key fingerprints. Design notes: [docs/sync-design.md](docs/sync-design.md).
+
+## AI agents (MCP)
+
+`backscroll mcp` is a built-in [Model Context Protocol](https://modelcontextprotocol.io)
+server (stdio, zero dependencies), so an AI coding agent can answer
+*"what did that command print?"* from your recorded history instead of
+guessing — or re-running something expensive or destructive:
+
+- **search_output** — "find where the build first said `undefined symbol`"
+- **get_output** — the full output of any command (`-1` = your last one)
+- **list_commands** — recent history, e.g. failures only
+- **diff_output** — what changed vs. the previous run of the same command
+
+Register it with your client:
+
+```sh
+# Claude Code
+claude mcp add backscroll -- backscroll mcp
+```
+
+```jsonc
+// Cursor / Windsurf / VS Code-style mcpServers config
+{ "mcpServers": { "backscroll": { "command": "backscroll", "args": ["mcp"] } } }
+```
+
+**Secrets are masked by default**: everything handed to the client passes
+through the same redaction patterns as `backscroll redact` (built-ins for
+common token formats + your `~/.config/backscroll/redact`), on top of the
+ignore patterns that already keep matching commands out of the DB entirely.
+`backscroll mcp --no-redact` disables masking if you really want it. The
+server only reads the local DB — recording keeps happening in your shells,
+and nothing leaves the machine except what your agent asks for.
 
 ## vs. other tools
 
@@ -339,8 +372,8 @@ responsibility. backscroll is local-only by design. Still:
 
 Early but working: bash, zsh, and fish on Linux and macOS, with
 ignore-patterns, session pause (`off`/`on`), output diffing, the fzf picker
-(`pick`, Ctrl-X Ctrl-P, tmux popups), encrypted cross-machine sync, and a
-`doctor` command.
+(`pick`, Ctrl-X Ctrl-P, tmux popups), encrypted cross-machine sync, an MCP
+server for AI agents, and a `doctor` command.
 Issues and PRs welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License

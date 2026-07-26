@@ -108,6 +108,14 @@ adds the picker binding and tab completion, and both together are fine.
 	Permanently mask secrets (tokens, keys, passwords) in stored entries,
 	including the search index. Idempotent.
 
+*mcp* [*--no-redact*]
+	Run a Model Context Protocol server on stdin/stdout (JSON-RPC, MCP
+	stdio transport), so AI coding agents can query your history: tools
+	_search_output_, _list_commands_, _get_output_, _diff_output_.
+	Secrets are masked by default in everything handed to the client
+	(same patterns as *redact*); *--no-redact* disables that. Register
+	with your client as command *backscroll*, args *mcp*.
+
 *off* / *on*
 	Pause / resume recording in the current session (in-band; no IPC).
 

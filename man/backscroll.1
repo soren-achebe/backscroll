@@ -146,6 +146,16 @@ Permanently mask secrets (tokens, keys, passwords) in stored entries,
 including the search index.\& Idempotent.\&
 .P
 .RE
+\fBmcp\fR [\fB--no-redact\fR]
+.RS 4
+Run a Model Context Protocol server on stdin/stdout (JSON-RPC, MCP
+stdio transport), so AI coding agents can query your history: tools
+\fIsearch_output\fR, \fIlist_commands\fR, \fIget_output\fR, \fIdiff_output\fR.\&
+Secrets are masked by default in everything handed to the client
+(same patterns as \fBredact\fR); \fB--no-redact\fR disables that.\& Register
+with your client as command \fBbackscroll\fR, args \fBmcp\fR.\&
+.P
+.RE
 \fBoff\fR / \fBon\fR
 .RS 4
 Pause / resume recording in the current session (in-band; no IPC).\&

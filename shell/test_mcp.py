@@ -53,7 +53,7 @@ def ok(cond, label, detail=""):
 def record_session(home, env):
     with open(os.path.join(home, ".bashrc"), "w") as f:
         f.write(f'eval "$({BKS} init bash)"\nPS1="$ "\n')
-    sh = pexpect.spawn(BKS, ["run"], env=env, timeout=15)
+    sh = pexpect.spawn(BKS, ["run"], env=env, cwd=home, timeout=15)
     sh.expect(rb"\$ ")
 
     def run(cmd):
