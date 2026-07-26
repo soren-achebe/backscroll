@@ -90,6 +90,10 @@ Usage:
                                  end-to-end encrypted, no server needed:
                                  init <dir>, export, import, status
                                  (backscroll sync --help for details)
+  backscroll mcp                 Model Context Protocol server over stdio:
+                                 lets AI coding agents search your history
+                                 and read command outputs. Secrets are
+                                 redacted by default (--no-redact opts out)
   backscroll off | on            pause / resume recording (this session)
   backscroll doctor              check that everything is set up correctly
   backscroll doctor --reindex    rebuild the full-text search index
@@ -137,6 +141,8 @@ func main() {
 		err = cmdRedact(args)
 	case "sync":
 		err = cmdSync(args)
+	case "mcp":
+		err = cmdMCP(args)
 	case "off", "on":
 		err = cmdToggle(cmd)
 	case "doctor":
