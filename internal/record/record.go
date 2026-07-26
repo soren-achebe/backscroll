@@ -211,17 +211,36 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 			return
 		}
 		raw := buf.Bytes()
-		if name == "" && !hasExit && len(raw) == 0 {
-			// Phantom prompt cycle: no command text, no output, no exit
-			// code. VS Code's bash integration emits E;; + C + bare D when
-			// Ctrl-C is pressed at an empty prompt (the PROMPT_COMMAND
-			// re-fire quirk); nothing real ran, so store nothing. A real
-			// command always has at least one of the three.
-			buf = nil
-			curCmd, curHint = "", ""
-			return
-		}
 		plain := ansi.Strip(raw)
+		if name == "" && !hasExit {
+			// No command text and no exit code: only worth keeping if
+			// there is real (non-metadata) output.
+			if len(plain) == 0 {
+				// Phantom prompt cycle. VS Code's bash integration emits
+				// E;; + C + bare D when Ctrl-C is pressed at an empty
+				// prompt (the PROMPT_COMMAND re-fire quirk); Ghostty's
+				// zsh integration opens a C for `exit` whose only bytes
+				// are an OSC 2 title + cursor-shape escape. Nothing real
+				// ran, so store nothing. Compared ANSI-stripped: pure
+				// escape-sequence traffic is terminal metadata, not
+				// output. A real command always leaves text, an exit
+				// code, or command text.
+				buf = nil
+				curCmd, curHint = "", ""
+				return
+			}
+			if t := strings.TrimSpace(string(plain)); t == "exit" || t == "logout" {
+				// Session teardown echoed by the shell itself: bash
+				// prints "exit" when the shell terminates. Without a
+				// cmdline-providing emitter there is no name to trip
+				// isShellExit above, so match the echo. (Plain-133
+				// emitters like Ghostty open a C for `exit` that never
+				// gets a D.)
+				buf = nil
+				curCmd, curHint = "", ""
+				return
+			}
+		}
 		if name == "" {
 			name = "(unknown command)"
 		}

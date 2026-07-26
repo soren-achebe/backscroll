@@ -133,6 +133,15 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 > commands longer than 57 bytes), plus exit codes and OSC 7 cwd, with no
 > snippet installed.
 
+> **Ghostty?** Its auto-injected integration coexists cleanly with
+> backscroll: with the snippet installed you get full fidelity, and even
+> with no snippet you still get outputs, cwd, and (zsh) exit codes —
+> though commands are labeled `(unknown command)` since Ghostty's marks
+> carry no command line, and its bash exit statuses are currently always
+> 0 due to an upstream script bug (see
+> [docs/osc133.md](docs/osc133.md), gotcha 15). Install the snippet for
+> the real thing.
+
 1. Add the integration to your shell rc (inert outside recorded sessions):
 
    ```sh

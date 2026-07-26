@@ -72,6 +72,26 @@ jobs:
           BKS_BIN="$PWD/backscroll" BKS_TEST_KITTY_BASH=/tmp/kitty.bash \
             BKS_TEST_KITTY_ZSH=/tmp/kitty-integration BKS_TEST_WEZTERM_SH=/tmp/wezterm.sh \
             python3 shell/test_kitty_wezterm.py
+      - name: E2E test against Ghostty shell integration (zero-config)
+        if: runner.os == 'Linux'
+        run: |
+          # Pinned upstream integration scripts, fetched for testing only
+          # (not vendored; ghostty's bash script is GPLv3 via kitty
+          # heritage, zsh is MIT). Update the commit SHA and checksums
+          # together. NOTE: the pinned ghostty.bash has an upstream bug —
+          # every 133;D on the bash>=4.4 path reports exit 0 (see
+          # docs/osc133.md gotcha 15); the suite pins that behavior and
+          # must be updated when upstream fixes it.
+          GHOSTTY_SHA=2de5e7d38e1354759211722a8687c0815d2cf02c
+          curl -sL -o /tmp/ghostty.bash "https://raw.githubusercontent.com/ghostty-org/ghostty/$GHOSTTY_SHA/src/shell-integration/bash/ghostty.bash"
+          curl -sL -o /tmp/ghostty-integration "https://raw.githubusercontent.com/ghostty-org/ghostty/$GHOSTTY_SHA/src/shell-integration/zsh/ghostty-integration"
+          sha256sum -c - <<'SUMS'
+          9c250c90d00f11c02a4245e940e5330e7e5d1eabae46d70c53b141b46b4921f0  /tmp/ghostty.bash
+          1a2bcb867f06667d5d743221aea42b1d322f3ae402e1a62ba941cba3c5d17f19  /tmp/ghostty-integration
+          SUMS
+          BKS_BIN="$PWD/backscroll" BKS_TEST_GHOSTTY_BASH=/tmp/ghostty.bash \
+            BKS_TEST_GHOSTTY_ZSH=/tmp/ghostty-integration \
+            python3 shell/test_ghostty.py
       - name: cache bash 3.2.57
         if: runner.os == 'Linux'
         uses: actions/cache@v4

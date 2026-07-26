@@ -50,8 +50,13 @@ if [[ -n "$BACKSCROLL_ACTIVE" && -z "$BACKSCROLL_HOOKED" ]]; then
       # and bash-preexec internals (its installer runs from PROMPT_COMMAND)
       [[ "$BASH_COMMAND" == __bks_* || "$BASH_COMMAND" == __bp_* ]] && return
       # ignore fragments of PROMPT_COMMAND itself ([*] — it may be an
-      # array on bash >= 5.1, and others may have appended elements)
-      [[ -n "$BASH_COMMAND" && "${PROMPT_COMMAND[*]}" == *"$BASH_COMMAND"* ]] && return
+      # array on bash >= 5.1, and others may have appended elements).
+      # Match against both the raw text and a bash-normalized rendering
+      # (__bks_pc_norm, built in __bks_precmd): BASH_COMMAND is bash's
+      # pretty-printed form, so e.g. Ghostty's `__ghostty_hook 2>/dev/null`
+      # fires the trap as `__ghostty_hook 2> /dev/null` — a raw substring
+      # test alone misses it and we'd record the hook as a command.
+      [[ -n "$BASH_COMMAND" && "${PROMPT_COMMAND[*]}$__bks_pc_norm" == *"$BASH_COMMAND"* ]] && return
       cmd=$(HISTTIMEFORMAT= builtin history 1 2>/dev/null | sed 's/^ *[0-9]* *//')
       [[ -z "$cmd" ]] && cmd="$BASH_COMMAND"
     fi
@@ -69,6 +74,22 @@ if [[ -n "$BACKSCROLL_ACTIVE" && -z "$BACKSCROLL_HOOKED" ]]; then
     fi
     printf '\033]7;file://%s%s\007' "${HOSTNAME:-localhost}" "$PWD"
     printf '\033]133;A\007'
+    # Rebuild the normalized PROMPT_COMMAND cache when it changes (other
+    # integrations append their hooks lazily). Defining a throwaway
+    # function around the fragments and printing it back with `declare -f`
+    # yields bash's canonical formatting — the same formatting BASH_COMMAND
+    # uses inside the DEBUG trap (redirections gain a space, etc.), which
+    # the preexec fragment guard needs for its substring test.
+    if [[ "${PROMPT_COMMAND[*]}" != "$__bks_pc_src" ]]; then
+      __bks_pc_src="${PROMPT_COMMAND[*]}"
+      __bks_pc_norm=""
+      if eval "__bks_pc_probe() {
+${PROMPT_COMMAND[*]}
+}" 2>/dev/null; then
+        __bks_pc_norm=$(declare -f __bks_pc_probe 2>/dev/null)
+        unset -f __bks_pc_probe 2>/dev/null
+      fi
+    fi
     __bks_at_prompt=1
   }
 
