@@ -43,14 +43,17 @@ type Parser struct {
 	altScreen bool
 	wezProg   []byte // partial base64 of a word-split WEZTERM_PROG (see handleOSC)
 
-	// Input-echo capture (B..C region). Plain-133 emitters never report
-	// the command text; the echoed keystrokes between the B (input
-	// starts) and C (execution starts) marks are the only trace of it.
-	// The raw region is handed to ev.Echo at C time for reconstruction.
-	echoing  bool // between a B mark and the next C/D/A
-	echo     bytes.Buffer
-	echoOver bool // region exceeded echoCap: discard, don't truncate
-	promptK  byte // kind from the last 133;P;k=<kind> mark (kitty protocol)
+	// Input-echo capture. Plain-133 emitters never report the command
+	// text; the echoed keystrokes between the B (input starts) and C
+	// (execution starts) marks are the only trace of it. The prompt
+	// bytes (from A / 133;P to B) are captured too — reconstruction
+	// must replay them to know where the cursor really was when typing
+	// began — with phase sentinels spliced in at the mark boundaries.
+	// The raw region is handed to ev.Echo at C time.
+	echoPhase byte // 0 = off, cellPrompt, cellInput
+	echoInput bool // an input phase was entered (a B mark was seen)
+	echo      bytes.Buffer
+	echoOver  bool // region exceeded echoCap: discard, don't truncate
 }
 
 func NewParser(ev Events) *Parser {
@@ -78,7 +81,7 @@ func (p *Parser) Feed(chunk []byte) {
 			if j < 0 {
 				if p.capturing && !p.altScreen {
 					out = append(out, chunk[i:]...)
-				} else if p.echoing {
+				} else if p.echoPhase != 0 {
 					p.echoAdd(chunk[i:])
 				}
 				i = len(chunk) // done
@@ -86,7 +89,7 @@ func (p *Parser) Feed(chunk []byte) {
 			}
 			if p.capturing && !p.altScreen {
 				out = append(out, chunk[i:i+j]...)
-			} else if p.echoing {
+			} else if p.echoPhase != 0 {
 				p.echoAdd(chunk[i : i+j])
 			}
 			i += j // chunk[i] is now the ESC; loop increment skips it
@@ -103,7 +106,7 @@ func (p *Parser) Feed(chunk []byte) {
 				// some other escape sequence; pass its bytes into capture
 				if p.capturing && !p.altScreen {
 					out = append(out, 0x1b, b)
-				} else if p.echoing {
+				} else if p.echoPhase != 0 {
 					p.echoAdd([]byte{0x1b, b})
 				}
 				p.st = sNorm
@@ -139,7 +142,7 @@ func (p *Parser) Feed(chunk []byte) {
 				if p.capturing && !p.altScreen {
 					out = append(out, 0x1b, '[')
 					out = append(out, seq...)
-				} else if p.echoing {
+				} else if p.echoPhase != 0 {
 					p.echoAdd([]byte{0x1b, '['})
 					p.echoAdd([]byte(seq))
 				}
@@ -187,32 +190,42 @@ func (p *Parser) echoAdd(b []byte) {
 }
 
 func (p *Parser) echoReset() {
-	p.echoing = false
+	p.echoPhase = 0
+	p.echoInput = false
 	p.echoOver = false
 	p.echo.Reset()
 }
 
-// markB handles an input-start mark (OSC 133;B / 633;B): the prompt is
-// drawn, user keystrokes echo from here until the C mark. A B mark also
-// re-fires on every prompt redraw (emitters embed it in PS1, so Ctrl-L
-// reprints it) — resetting the buffer then is exactly right, because the
-// redrawn prompt text that just polluted the region is discarded. The one
-// exception is a continuation prompt (PS2, marked 133;P;k=s in the kitty
-// prompt protocol): its B continues the same logical command, so the
-// earlier lines are kept.
+// echoPromptStart begins a fresh capture region at a prompt boundary
+// (an A mark, or a 133;P primary-prompt mark — which, unlike A, is
+// embedded in PS1 and so re-fires on prompt redraws like Ctrl-L,
+// discarding the redraw noise that just polluted the region).
+func (p *Parser) echoPromptStart() {
+	p.echoReset()
+	p.echoPhase = cellPrompt
+	p.echoAdd(echoSentPrompt)
+}
+
+// markB handles an input-start mark (OSC 133;B / 633;B): user keystrokes
+// echo from here until the C mark. Normally a prompt phase is already
+// open (A or 133;P preceded it) and the region continues; a B with *no*
+// prompt phase is either a bare-B emitter (no A: start fresh) or a
+// prompt redraw on such an emitter (B re-fires from PS1: the discarded
+// buffer is exactly the redraw noise).
 func (p *Parser) markB() {
-	if p.promptK != 's' {
+	if p.echoPhase != cellPrompt {
 		p.echoReset()
 	}
-	p.promptK = 0
-	p.echoing = true
+	p.echoPhase = cellInput
+	p.echoInput = true
+	p.echoAdd(echoSentInput)
 }
 
 // markC handles a pre-execution mark (OSC 133;C / 633;C): output begins.
 func (p *Parser) markC() {
 	p.capturing = true
 	p.altScreen = false
-	if p.echoing && !p.echoOver && p.echo.Len() > 0 && p.ev.Echo != nil {
+	if p.echoInput && !p.echoOver && p.ev.Echo != nil {
 		b := make([]byte, p.echo.Len())
 		copy(b, p.echo.Bytes())
 		p.ev.Echo(b)
@@ -288,18 +301,19 @@ func (p *Parser) handleOSC(payload string, out *[]byte) {
 			p.markD(rest)
 		case rest == "A" || strings.HasPrefix(rest, "A;"):
 			// new prompt cycle: any un-executed input echo is stale
-			p.echoReset()
-			p.promptK = 0
+			p.echoPromptStart()
 		case rest == "B" || strings.HasPrefix(rest, "B;"):
 			p.markB()
 		case strings.HasPrefix(rest, "P;"):
 			// kitty prompt-kind mark: k=s flags a secondary (PS2)
-			// prompt, whose B mark continues the current input region
-			p.promptK = 0
-			for _, param := range strings.Split(rest[2:], ";") {
-				if v, found := strings.CutPrefix(param, "k="); found && v != "" {
-					p.promptK = v[0]
-				}
+			// prompt, whose B mark *continues* the current input
+			// region across the continuation line; anything else is a
+			// primary prompt starting a fresh region
+			if strings.Contains(";"+rest[2:]+";", ";k=s;") && p.echoInput {
+				p.echoPhase = cellPrompt
+				p.echoAdd(echoSentPrompt)
+			} else {
+				p.echoPromptStart()
 			}
 		}
 	case strings.HasPrefix(payload, "633;"):
@@ -319,7 +333,7 @@ func (p *Parser) handleOSC(payload string, out *[]byte) {
 		case rest == "D" || strings.HasPrefix(rest, "D;"):
 			p.markD(rest)
 		case rest == "A" || strings.HasPrefix(rest, "A;"):
-			p.echoReset()
+			p.echoPromptStart()
 		case rest == "B" || strings.HasPrefix(rest, "B;"):
 			p.markB()
 		case strings.HasPrefix(rest, "E;"):

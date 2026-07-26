@@ -29,16 +29,35 @@ import (
 // that was never the command.
 
 const (
-	echoCap      = 32 << 10 // parser-side cap on a captured B..C region
+	echoCap      = 32 << 10 // parser-side cap on a captured echo region
 	echoMaxRows  = 512      // emulator-side cap on grid height
 	defaultWidth = 80
+
+	// Cell provenance. The prompt is replayed into the grid too — the
+	// B mark fires with the cursor *after* the prompt, and line-editor
+	// redraws (ZLE's deferred-wrap dance in particular) only make sense
+	// from that true cursor position — but only cells written during an
+	// input phase belong to the command.
+	cellUnset  = 0
+	cellPrompt = 1
+	cellInput  = 2
 )
 
-// erow is one physical grid row. Cells hold 0 for "never written" —
-// distinct from a typed space — which is what lets extraction tell a
-// cursor-jump gap (decoration, e.g. a zsh RPROMPT) from real spacing.
+// Phase sentinels the parser splices into the captured region at mark
+// boundaries (APC sequences: invisible to any terminal, never emitted by
+// line editors).
+var (
+	echoSentPrompt = []byte("\x1b_bks:P\x1b\\") // prompt bytes follow (A, 133;P)
+	echoSentInput  = []byte("\x1b_bks:B\x1b\\") // input bytes follow (B mark)
+)
+
+// erow is one physical grid row. Flags record who wrote each cell
+// (unset / prompt / input): a typed space is an input cell — distinct
+// from never-written, which is what lets extraction tell a cursor-jump
+// gap (decoration, e.g. a zsh RPROMPT) from real spacing.
 type erow struct {
 	cells []rune
+	flags []uint8
 	wrap  bool // continuation of the previous row via autowrap, not \n
 }
 
@@ -47,8 +66,18 @@ type echoScreen struct {
 	rows           []*erow
 	r, c           int
 	savedR, savedC int
-	alt            bool // inside the alternate screen (fzf etc.): freeze
-	bad            bool // saw a sequence we can't model; abort
+	phase          uint8 // provenance for cells written now
+	alt            bool  // inside the alternate screen (fzf etc.): freeze
+	bad            bool  // saw a sequence we can't model; abort
+
+	// Ctrl-C detection: a line killed at the prompt is echoed as a bare
+	// "^C" with no newline after it (an *executed* line always ends
+	// with the echoed Enter). Emitters that re-fire a phantom C mark on
+	// SIGINT (VS Code's bash hooks) would otherwise turn that echo into
+	// a stored "command".
+	tail       [2]rune // last two input runes put
+	lfAfterPut bool    // a linefeed followed the last put
+	ctrlCAbort bool    // bracketed paste ended right after a bare ^C
 }
 
 // ReconstructEcho replays the echoed bytes of one input region and
@@ -58,9 +87,18 @@ func ReconstructEcho(b []byte, width int) string {
 	if width <= 0 {
 		width = defaultWidth
 	}
-	s := &echoScreen{width: width}
+	s := &echoScreen{width: width, phase: cellInput}
 	s.feed(b)
 	if s.bad {
+		return ""
+	}
+	if s.ctrlCAbort || (s.tail == [2]rune{'^', 'C'} && !s.lfAfterPut) {
+		// The input line was killed with Ctrl-C, never executed: the
+		// shell echoed a bare "^C" and tore the line editor down right
+		// there (an *executed* line always echoes Enter's newline
+		// first). Some emitters re-fire a phantom C mark on SIGINT
+		// (VS Code's bash hooks) — without this, that echo would be
+		// stored as a command named "^C".
 		return ""
 	}
 	return s.extract()
@@ -73,7 +111,10 @@ func (s *echoScreen) row() *erow {
 			s.r = len(s.rows) - 1
 			break
 		}
-		s.rows = append(s.rows, &erow{cells: make([]rune, s.width)})
+		s.rows = append(s.rows, &erow{
+			cells: make([]rune, s.width),
+			flags: make([]uint8, s.width),
+		})
 	}
 	return s.rows[s.r]
 }
@@ -91,8 +132,13 @@ func (s *echoScreen) put(r rune) {
 	row := s.row()
 	if s.c < len(row.cells) {
 		row.cells[s.c] = r
+		row.flags[s.c] = s.phase
 	}
 	s.c++
+	if s.phase == cellInput {
+		s.tail[0], s.tail[1] = s.tail[1], r
+		s.lfAfterPut = false
+	}
 }
 
 func (s *echoScreen) down(n int, hard bool) {
@@ -110,12 +156,22 @@ func (s *echoScreen) feed(b []byte) {
 		stCsi
 		stOsc    // skip until BEL / ST
 		stOscEsc // saw ESC inside OSC
-		stStr    // DCS/APC/PM/SOS: skip until ST
+		stStr    // DCS/APC/PM/SOS: skip until ST (phase sentinels live here)
 		stStrEsc
 		stCharset // ESC ( ) * + — consume one designation byte
 	)
 	st := stNorm
 	var csi []byte
+	var apc []byte
+	endStr := func() {
+		switch string(apc) {
+		case "bks:P":
+			s.phase = cellPrompt
+		case "bks:B":
+			s.phase = cellInput
+		}
+		apc = apc[:0]
+	}
 	for i := 0; i < len(b); i++ {
 		ch := b[i]
 		switch st {
@@ -151,6 +207,7 @@ func (s *echoScreen) feed(b []byte) {
 				st = stOsc
 			case 'P', '_', '^', 'X': // DCS/APC/PM/SOS
 				st = stStr
+				apc = apc[:0]
 			case '(', ')', '*', '+':
 				st = stCharset
 			case '7':
@@ -201,14 +258,19 @@ func (s *echoScreen) feed(b []byte) {
 			}
 		case stStr:
 			if ch == 0x07 {
+				endStr()
 				st = stNorm
 			} else if ch == 0x1b {
 				st = stStrEsc
+			} else if len(apc) < 8 {
+				apc = append(apc, ch)
 			}
 		case stStrEsc:
 			if ch == '\\' {
+				endStr()
 				st = stNorm
 			} else {
+				apc = apc[:0]
 				st = stStr
 			}
 		}
@@ -227,6 +289,7 @@ func (s *echoScreen) applyCR() {
 func (s *echoScreen) applyLF() {
 	if !s.alt {
 		s.down(1, true)
+		s.lfAfterPut = true
 	}
 }
 
@@ -282,6 +345,12 @@ func (s *echoScreen) applyCSI(params string, final byte) {
 				if p == "1049" || p == "1047" || p == "47" {
 					s.alt = final == 'h'
 				}
+				if p == "2004" && final == 'l' &&
+					s.tail == [2]rune{'^', 'C'} && !s.lfAfterPut {
+					// readline tearing down bracketed paste directly
+					// after a bare ^C: the line died at the prompt
+					s.ctrlCAbort = true
+				}
 			}
 		}
 		return
@@ -319,68 +388,57 @@ func (s *echoScreen) applyCSI(params string, final byte) {
 		row := s.row()
 		switch k {
 		case 0:
-			for i := s.c; i < len(row.cells); i++ {
-				row.cells[i] = 0
-			}
+			row.clear(s.c, len(row.cells))
 		case 1:
-			for i := 0; i <= s.c && i < len(row.cells); i++ {
-				row.cells[i] = 0
-			}
+			row.clear(0, s.c+1)
 		case 2:
-			for i := range row.cells {
-				row.cells[i] = 0
-			}
+			row.clear(0, len(row.cells))
 		}
 	case 'J':
 		k := csiParams(params, 0)[0]
 		switch k {
 		case 0: // cursor to end of screen
-			row := s.row()
-			for i := s.c; i < len(row.cells); i++ {
-				row.cells[i] = 0
-			}
+			s.row().clear(s.c, s.width)
 			if s.r+1 < len(s.rows) {
 				s.rows = s.rows[:s.r+1]
 			}
 		case 1: // start of screen to cursor
 			for ri := 0; ri < s.r && ri < len(s.rows); ri++ {
-				for i := range s.rows[ri].cells {
-					s.rows[ri].cells[i] = 0
-				}
+				s.rows[ri].clear(0, s.width)
 			}
-			row := s.row()
-			for i := 0; i <= s.c && i < len(row.cells); i++ {
-				row.cells[i] = 0
-			}
+			s.row().clear(0, s.c+1)
 		default: // 2, 3: everything
 			s.rows = s.rows[:0]
 		}
 	case 'P': // delete chars (shift left)
 		row := s.row()
 		if s.c < len(row.cells) {
-			copy(row.cells[s.c:], row.cells[min(s.c+n, len(row.cells)):])
-			for i := len(row.cells) - min(n, len(row.cells)-s.c); i < len(row.cells); i++ {
-				row.cells[i] = 0
-			}
+			cut := min(s.c+n, len(row.cells))
+			copy(row.cells[s.c:], row.cells[cut:])
+			copy(row.flags[s.c:], row.flags[cut:])
+			row.clear(len(row.cells)-(cut-s.c), len(row.cells))
 		}
 	case '@': // insert blanks (shift right)
 		row := s.row()
 		if s.c < len(row.cells) {
-			copy(row.cells[min(s.c+n, len(row.cells)):], row.cells[s.c:])
-			for i := s.c; i < min(s.c+n, len(row.cells)); i++ {
+			at := min(s.c+n, len(row.cells))
+			copy(row.cells[at:], row.cells[s.c:])
+			copy(row.flags[at:], row.flags[s.c:])
+			for i := s.c; i < at; i++ {
 				row.cells[i] = ' '
+				row.flags[i] = s.phase
 			}
 		}
 	case 'X': // erase chars (no shift)
-		row := s.row()
-		for i := s.c; i < min(s.c+n, len(row.cells)); i++ {
-			row.cells[i] = 0
-		}
+		s.row().clear(s.c, min(s.c+n, s.width))
 	case 'L': // insert lines
 		for i := 0; i < n && len(s.rows) < echoMaxRows; i++ {
 			s.rows = append(s.rows, nil)
 			copy(s.rows[s.r+1:], s.rows[s.r:])
-			s.rows[s.r] = &erow{cells: make([]rune, s.width)}
+			s.rows[s.r] = &erow{
+				cells: make([]rune, s.width),
+				flags: make([]uint8, s.width),
+			}
 		}
 	case 'M': // delete lines
 		for i := 0; i < n && s.r < len(s.rows); i++ {
@@ -402,87 +460,125 @@ func (s *echoScreen) applyCSI(params string, final byte) {
 }
 
 // extract renders the final grid into the reconstructed command text.
+// Only input cells contribute: the replayed prompt (PS1, and PS2 "> "
+// continuation prompts on marked emitters) positioned the cursor
+// correctly and is then discarded.
 func (s *echoScreen) extract() string {
-	var logical []string
-	var cur strings.Builder
-	flushLogical := func() {
-		logical = append(logical, strings.TrimRight(cur.String(), " "))
-		cur.Reset()
+	type cell struct {
+		r rune
+		f uint8
 	}
+	var logical [][]cell
+	var cur []cell
 	for ri, row := range s.rows {
-		cells := s.trimDecoration(row.cells)
-		full := ri+1 < len(s.rows) && s.rows[ri+1].wrap
-		// find last written cell
-		last := -1
-		for i, r := range cells {
-			if r != 0 {
-				last = i
-			}
-		}
-		if full {
-			// a wrapped continuation follows: contribute the whole row,
-			// unset cells as spaces (they are interior)
-			for _, r := range cells {
-				if r == 0 {
-					r = ' '
-				}
-				cur.WriteRune(r)
+		s.trimDecoration(row)
+		wrapped := ri+1 < len(s.rows) && s.rows[ri+1].wrap
+		if wrapped {
+			// a continuation follows: the whole row is interior
+			for i := range row.cells {
+				cur = append(cur, cell{row.cells[i], row.flags[i]})
 			}
 			continue
 		}
+		last := -1
+		for i, f := range row.flags {
+			if f == cellInput {
+				last = i
+			}
+		}
 		for i := 0; i <= last; i++ {
-			r := cells[i]
-			if r == 0 {
+			cur = append(cur, cell{row.cells[i], row.flags[i]})
+		}
+		logical = append(logical, cur)
+		cur = nil
+	}
+	if len(cur) > 0 {
+		logical = append(logical, cur)
+	}
+
+	var lines []string
+	for _, lc := range logical {
+		first, last := -1, -1
+		for i, c := range lc {
+			if c.f == cellInput {
+				if first < 0 {
+					first = i
+				}
+				last = i
+			}
+		}
+		if first < 0 {
+			lines = append(lines, "")
+			continue
+		}
+		var b strings.Builder
+		for i := first; i <= last; i++ {
+			r := lc[i].r
+			if lc[i].f != cellInput || r == 0 {
 				r = ' '
 			}
-			cur.WriteRune(r)
+			b.WriteRune(r)
 		}
-		flushLogical()
+		lines = append(lines, b.String())
 	}
-	if cur.Len() > 0 {
-		flushLogical()
+	// drop leading/trailing empty lines (prompt rows, the \r\n echoed
+	// by Enter)
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
 	}
-	// drop trailing empty lines (the \r\n echoed by Enter)
-	for len(logical) > 0 && strings.TrimSpace(logical[len(logical)-1]) == "" {
-		logical = logical[:len(logical)-1]
+	for len(lines) > 0 && strings.TrimSpace(lines[0]) == "" {
+		lines = lines[1:]
 	}
-	// drop leading empty lines (prompt-drawing artifacts)
-	for len(logical) > 0 && strings.TrimSpace(logical[0]) == "" {
-		logical = logical[1:]
-	}
-	out := strings.Join(logical, "\n")
-	return strings.TrimRight(out, " \t\r\n")
+	return strings.TrimRight(strings.Join(lines, "\n"), " \t\r\n")
 }
 
-// trimDecoration drops a right-aligned trailing segment that is separated
-// from the input text by a run of never-written cells — the signature of
-// a decoration drawn with a cursor jump (zsh RPROMPT, transient right-side
-// widgets). Typed spaces mark their cells as written, so real commands
-// with big interior spacing are not affected.
-func (s *echoScreen) trimDecoration(cells []rune) []rune {
+// trimDecoration erases a right-aligned trailing input segment that is
+// separated from the rest of the input by a run of never-written cells —
+// the signature of a decoration drawn with a cursor jump (zsh RPROMPT,
+// transient right-side widgets). Typed spaces mark their cells as
+// written, so real commands with big interior spacing are not affected.
+func (s *echoScreen) trimDecoration(row *erow) {
 	last := -1
-	for i, r := range cells {
-		if r != 0 {
+	for i, f := range row.flags {
+		if f == cellInput {
 			last = i
 		}
 	}
 	if last < s.width-2 {
-		return cells // doesn't reach the right edge: not a right-prompt
+		return // doesn't reach the right edge: not a right-prompt
 	}
-	// scan backwards from the segment for a gap of >= 3 unset cells
 	segStart := last
-	for segStart > 0 && cells[segStart-1] != 0 {
+	for segStart > 0 && row.flags[segStart-1] != cellUnset {
 		segStart--
 	}
 	gapEnd := segStart // exclusive
 	gapStart := gapEnd
-	for gapStart > 0 && cells[gapStart-1] == 0 {
+	for gapStart > 0 && row.flags[gapStart-1] == cellUnset {
 		gapStart--
 	}
 	if gapStart == 0 || gapEnd-gapStart < 3 {
-		return cells // no preceding text, or gap too small to be a jump
+		return // no preceding text, or gap too small to be a jump
 	}
-	trimmed := make([]rune, len(cells))
-	copy(trimmed, cells[:gapStart])
-	return trimmed
+	row.clear(gapEnd, last+1)
+}
+
+// clear resets cells [from, to) to never-written.
+func (w *erow) clear(from, to int) {
+	if from < 0 {
+		from = 0
+	}
+	if to > len(w.cells) {
+		to = len(w.cells)
+	}
+	for i := from; i < to; i++ {
+		w.cells[i] = 0
+		w.flags[i] = cellUnset
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

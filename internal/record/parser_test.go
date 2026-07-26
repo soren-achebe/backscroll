@@ -578,20 +578,50 @@ func echoCollector() (*Parser, *collected, *[]string) {
 	return p, c, echoes
 }
 
+// recon runs captured regions through the reconstructor — the actual
+// contract of the Echo event.
+func recon(echoes []string) []string {
+	out := make([]string, len(echoes))
+	for i, e := range echoes {
+		out[i] = ReconstructEcho([]byte(e), 80)
+	}
+	return out
+}
+
 func TestEchoRegionCaptured(t *testing.T) {
 	p, c, echoes := echoCollector()
 	p.Feed([]byte(osc("133;A") + "prompt$ " + osc("133;B") + "ls -la\r\n" +
 		osc("133;C") + "total 0\r\n" + osc("133;D;0")))
-	if len(*echoes) != 1 || (*echoes)[0] != "ls -la\r\n" {
-		t.Fatalf("echoes = %q", *echoes)
+	if got := recon(*echoes); len(got) != 1 || got[0] != "ls -la" {
+		t.Fatalf("recon = %q", got)
 	}
-	// prompt text before B must not leak into the region
-	if strings.Contains((*echoes)[0], "prompt") {
-		t.Fatalf("prompt leaked: %q", (*echoes)[0])
+	// the prompt is captured (cursor positioning) but phase-tagged so it
+	// never appears in the reconstruction
+	if !strings.Contains((*echoes)[0], "prompt$ ") {
+		t.Fatalf("prompt bytes should be captured: %q", (*echoes)[0])
 	}
 	// and output capture is unaffected
 	if len(c.outs) != 1 || c.outs[0] != "total 0\r\n" {
 		t.Fatalf("outs = %q", c.outs)
+	}
+}
+
+func TestEchoPromptOffsetWrap(t *testing.T) {
+	// ZLE's deferred-wrap dance only reconstructs correctly if the
+	// replay starts from the true post-prompt cursor position: with a
+	// 2-col prompt and width 80, the 113th typed char sits at the last
+	// column; ZLE forces the wrap with a real char, then CR + erase +
+	// rewrite on the next row. Replayed without the prompt offset, the
+	// erase lands on the first row and destroys the line.
+	w := 20
+	cmd := "echo " + strings.Repeat("x", 20)
+	// prompt "$ " (2 cols) + 18 more cols = full first row: chars 0..17
+	// of cmd; ZLE emits char 18, space-to-wrap, CR, clear, rest
+	region := "\x1b_bks:P\x1b\\" + "$ " + "\x1b_bks:B\x1b\\" +
+		cmd[:18] + " \r\x1b[K" + cmd[18:] + "\r\n"
+	got := ReconstructEcho([]byte(region), w)
+	if got != cmd {
+		t.Fatalf("got %q want %q", got, cmd)
 	}
 }
 
@@ -601,8 +631,21 @@ func TestEchoRegionResetOnPromptRedraw(t *testing.T) {
 	p, _, echoes := echoCollector()
 	p.Feed([]byte(osc("133;B") + "old typing\x1b[H\x1b[2J" + "prompt$ " +
 		osc("133;B") + "make\r\n" + osc("133;C") + osc("133;D;0")))
-	if len(*echoes) != 1 || (*echoes)[0] != "make\r\n" {
-		t.Fatalf("echoes = %q", *echoes)
+	if got := recon(*echoes); len(got) != 1 || got[0] != "make" {
+		t.Fatalf("recon = %q", got)
+	}
+}
+
+func TestEchoRegionResetOnPromptRedrawWithPMark(t *testing.T) {
+	// emitters embedding 133;P;k=i + B in PS1 (Ghostty): a Ctrl-L
+	// redraw re-fires both; the P mark starts a fresh region so the
+	// reprinted prompt is phase-tagged, not treated as typing
+	p, _, echoes := echoCollector()
+	p.Feed([]byte(osc("133;P;k=i") + "$ " + osc("133;B") + "old\x1b[H\x1b[2J" +
+		osc("133;P;k=i") + "$ " + osc("133;B") + "make\r\n" +
+		osc("133;C") + osc("133;D;0")))
+	if got := recon(*echoes); len(got) != 1 || got[0] != "make" {
+		t.Fatalf("recon = %q", got)
 	}
 }
 
@@ -612,9 +655,11 @@ func TestEchoRegionPS2Continues(t *testing.T) {
 	p.Feed([]byte(osc("133;P;k=i") + "$ " + osc("133;B") + "for f in *; do\r\n" +
 		osc("133;P;k=s") + "> " + osc("133;B") + "echo $f; done\r\n" +
 		osc("133;C") + osc("133;D;0")))
-	want := "for f in *; do\r\n> echo $f; done\r\n"
-	if len(*echoes) != 1 || (*echoes)[0] != want {
-		t.Fatalf("echoes = %q, want %q", *echoes, want)
+	// the marked PS2 "> " is a prompt, so it is excluded — the
+	// reconstruction is the actual multiline command
+	want := "for f in *; do\necho $f; done"
+	if got := recon(*echoes); len(got) != 1 || got[0] != want {
+		t.Fatalf("recon = %q, want %q", got, want)
 	}
 }
 
@@ -624,8 +669,8 @@ func TestEchoRegionAbandonedOnA(t *testing.T) {
 	p, _, echoes := echoCollector()
 	p.Feed([]byte(osc("133;B") + "half typed^C" + osc("133;A") + "$ " +
 		osc("133;B") + "true\r\n" + osc("133;C") + osc("133;D;0")))
-	if len(*echoes) != 1 || (*echoes)[0] != "true\r\n" {
-		t.Fatalf("echoes = %q", *echoes)
+	if got := recon(*echoes); len(got) != 1 || got[0] != "true" {
+		t.Fatalf("recon = %q", got)
 	}
 }
 
@@ -638,8 +683,8 @@ func TestEchoRegionOverflowDiscarded(t *testing.T) {
 	}
 	// and the next region is captured normally again
 	p.Feed([]byte(osc("133;B") + "ls\r\n" + osc("133;C") + osc("133;D;0")))
-	if len(*echoes) != 1 || (*echoes)[0] != "ls\r\n" {
-		t.Fatalf("echoes = %q", *echoes)
+	if got := recon(*echoes); len(got) != 1 || got[0] != "ls" {
+		t.Fatalf("recon = %q", got)
 	}
 }
 
@@ -649,9 +694,18 @@ func TestEchoRegionKeepsCSIDropsOSC(t *testing.T) {
 	p, _, echoes := echoCollector()
 	p.Feed([]byte(osc("133;B") + "l\x1b[32ms\x1b[0m" + osc("2;title") + "\r\n" +
 		osc("133;C") + osc("133;D;0")))
-	want := "l\x1b[32ms\x1b[0m\r\n"
-	if len(*echoes) != 1 || (*echoes)[0] != want {
-		t.Fatalf("echoes = %q, want %q", *echoes, want)
+	if len(*echoes) != 1 {
+		t.Fatalf("echoes = %q", *echoes)
+	}
+	e := (*echoes)[0]
+	if !strings.Contains(e, "\x1b[32m") {
+		t.Fatalf("CSI dropped from region: %q", e)
+	}
+	if strings.Contains(e, "title") {
+		t.Fatalf("OSC leaked into region: %q", e)
+	}
+	if got := ReconstructEcho([]byte(e), 80); got != "ls" {
+		t.Fatalf("recon = %q", got)
 	}
 }
 
@@ -667,8 +721,8 @@ func TestEchoRegionChunked(t *testing.T) {
 			}
 			p.Feed(stream[i:end])
 		}
-		if len(*echoes) != 1 || (*echoes)[0] != "git status\r\n" {
-			t.Fatalf("chunk=%d: echoes = %q", chunk, *echoes)
+		if got := recon(*echoes); len(got) != 1 || got[0] != "git status" {
+			t.Fatalf("chunk=%d: recon = %q", chunk, got)
 		}
 		if len(c.outs) != 1 || c.outs[0] != "clean\r\n" {
 			t.Fatalf("chunk=%d: outs = %q", chunk, c.outs)
@@ -689,7 +743,7 @@ func TestEchoRegion633(t *testing.T) {
 	p, _, echoes := echoCollector()
 	p.Feed([]byte(osc("633;A") + "$ " + osc("633;B") + "pwd\r\n" +
 		osc("633;C") + "/tmp\r\n" + osc("633;D;0")))
-	if len(*echoes) != 1 || (*echoes)[0] != "pwd\r\n" {
-		t.Fatalf("echoes = %q", *echoes)
+	if got := recon(*echoes); len(got) != 1 || got[0] != "pwd" {
+		t.Fatalf("recon = %q", got)
 	}
 }

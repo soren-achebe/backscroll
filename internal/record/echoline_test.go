@@ -215,3 +215,30 @@ func itoa(n int) string {
 	}
 	return string(b[i:])
 }
+
+func TestEchoCtrlCAbortDetected(t *testing.T) {
+	// a line killed at the prompt: bare ^C echo, no newline — never ran
+	for _, seq := range []string{"^C", "half typed^C", "x\x1b[?2004l^C"} {
+		if got := ReconstructEcho([]byte(seq), 80); got != "" {
+			t.Fatalf("seq %q: expected abort, got %q", seq, got)
+		}
+	}
+	// literal "^C" typed at the end of a real command: the echoed Enter
+	// newline follows, so it is kept
+	if got := ReconstructEcho([]byte("grep ^C\r\n"), 80); got != "grep ^C" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestEchoCtrlCAbortWithPromptCycleNoise(t *testing.T) {
+	// the real VS Code bash phantom region: ^C, bracketed-paste off,
+	// then the re-fired prompt cycle's CR/LF noise
+	region := "^C\x1b[?2004l\r\x1b[?2004h\x1b[?2004l\r\r\n"
+	if got := ReconstructEcho([]byte(region), 80); got != "" {
+		t.Fatalf("expected abort, got %q", got)
+	}
+	region = "half typed^C\x1b[?2004l\r\r\n"
+	if got := ReconstructEcho([]byte(region), 80); got != "" {
+		t.Fatalf("expected abort, got %q", got)
+	}
+}

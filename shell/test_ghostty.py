@@ -24,8 +24,8 @@ This drives the real `backscroll run` binary on a PTY against the REAL
 pinned Ghostty scripts (see ci.yml) and asserts on the database:
 
   1. ghostty-only (no snippet): outputs, exit codes (incl. 130), and
-     OSC 7 cwd recorded; command text falls back to "(unknown command)"
-     (Ghostty provides no cmdline — documented degraded mode)
+     OSC 7 cwd recorded; command text reconstructed from the input echo
+     (Ghostty provides no cmdline — B..C echo is the only trace of it)
   2. ghostty + our snippet (the double-emission case every Ghostty user
      actually hits): command text correct, stored exactly once, exit
      codes right, no phantom entries from spurious D marks
@@ -200,8 +200,12 @@ def scenario(shell):
               exits == want_exits, f"got {exits}, want {want_exits}")
         check(f"[{tag}] cwd tracking via OSC 7 kitty-shell-cwd",
               rs[5]["cwd"] == "/tmp", f"got {rs[5]['cwd']!r}")
-        check(f"[{tag}] no-cmdline fallback labels entries",
-              all(r["cmd"] == "(unknown command)" for r in rs),
+        # Ghostty never reports the command line, but its PS1/PS2 carry
+        # proper B marks (and P;k=s on continuations) — so the recorder
+        # reconstructs the text from the input echo. Real text, no
+        # snippet installed.
+        check(f"[{tag}] command text reconstructed from input echo",
+              [r["cmd"] for r in rs] == WANT,
               f"got {[r['cmd'] for r in rs]}")
     body = outputs(f"/tmp/bks-ghostty-{shell}", env, [r["id"] for r in rs])
     check(f"[{tag}] output text recorded and searchable",
