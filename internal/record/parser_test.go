@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math/rand"
+	"strings"
 	"testing"
 )
 
@@ -374,5 +375,197 @@ func TestOSC633EmptyPromptDIgnored(t *testing.T) {
 	p.Feed([]byte(osc("633;A") + "$ " + osc("633;B") + osc("633;D") + osc("633;A")))
 	if len(c.outs) != 0 {
 		t.Fatalf("outs = %q", c.outs)
+	}
+}
+
+// kitty's shell integration (bash + zsh) attaches the command line to the
+// C mark shell-quoted: OSC 133;C;cmdline=%q. The value can contain raw
+// semicolons (escaped as \; or inside $'...'), so it must be taken as the
+// whole tail of the payload, not split on ';'.
+func TestKittyCmdlineHint(t *testing.T) {
+	p, c := collector()
+	// bash printf %q form
+	p.Feed([]byte(osc(`133;C;cmdline=echo\ \"hi\ there\"`) + "out" + osc("133;D;0")))
+	if len(c.hints) != 1 || c.hints[0] != `echo "hi there"` {
+		t.Fatalf("hints = %q", c.hints)
+	}
+	if len(c.outs) != 1 || c.outs[0] != "out" {
+		t.Fatalf("outs = %q", c.outs)
+	}
+	// raw semicolon in the command: whole-tail parse, no param splitting
+	p.Feed([]byte(osc(`133;C;cmdline=echo\ a\;b`) + osc("133;D;0")))
+	if len(c.hints) != 2 || c.hints[1] != "echo a;b" {
+		t.Fatalf("hints = %q", c.hints)
+	}
+	// bash $'...' form with control chars
+	p.Feed([]byte(osc(`133;C;cmdline=$'line1\nline2'`) + osc("133;D;1")))
+	if len(c.hints) != 3 || c.hints[2] != "line1\nline2" {
+		t.Fatalf("hints = %q", c.hints)
+	}
+	// zsh mixed-segment form
+	p.Feed([]byte(osc(`133;C;cmdline=printf$'\t'x`) + osc("133;D;0")))
+	if len(c.hints) != 4 || c.hints[3] != "printf\tx" {
+		t.Fatalf("hints = %q", c.hints)
+	}
+	// empty cmdline produces no hint
+	p.Feed([]byte(osc("133;C;cmdline=") + osc("133;D;0")))
+	if len(c.hints) != 4 {
+		t.Fatalf("empty cmdline produced a hint: %q", c.hints)
+	}
+	if len(c.exits) != 5 {
+		t.Fatalf("exits = %v", c.exits)
+	}
+}
+
+// WezTerm's shell integration reports the command line as a base64 user
+// var (OSC 1337 SetUserVar=WEZTERM_PROG) right after its plain 133;C.
+// The var must become a hint, be consumed (never stored in output), and
+// other OSC 1337 traffic must still pass through untouched.
+func TestWeztermProgHint(t *testing.T) {
+	p, c := collector()
+	b64 := base64.StdEncoding.EncodeToString([]byte("cargo build --release"))
+	p.Feed([]byte(osc("133;C;") + osc("1337;SetUserVar=WEZTERM_PROG="+b64) + "out" + osc("133;D;0")))
+	if len(c.hints) != 1 || c.hints[0] != "cargo build --release" {
+		t.Fatalf("hints = %q", c.hints)
+	}
+	if len(c.outs) != 1 || c.outs[0] != "out" {
+		t.Fatalf("SetUserVar leaked into output: %q", c.outs)
+	}
+
+	// `echo -n | base64` wraps at 76 cols: embedded newlines must be stripped
+	long := "echo " + strings.Repeat("x", 100)
+	wrapped := ""
+	for i, ch := range base64.StdEncoding.EncodeToString([]byte(long)) {
+		if i > 0 && i%76 == 0 {
+			wrapped += "\n"
+		}
+		wrapped += string(ch)
+	}
+	if !strings.Contains(wrapped, "\n") {
+		t.Fatal("test bug: wrapped b64 has no newline")
+	}
+	p.Feed([]byte(osc("133;C;") + osc("1337;SetUserVar=WEZTERM_PROG="+wrapped) + osc("133;D;0")))
+	if len(c.hints) != 2 || c.hints[1] != long {
+		t.Fatalf("wrapped hint = %q", c.hints)
+	}
+
+	// empty value (precmd clear) produces no hint
+	p.Feed([]byte(osc("133;C;") + osc("1337;SetUserVar=WEZTERM_PROG=") + osc("133;D;0")))
+	if len(c.hints) != 2 {
+		t.Fatalf("empty PROG produced a hint: %q", c.hints)
+	}
+
+	// other user vars and iTerm2-style File= payloads pass through into capture
+	other := osc("1337;SetUserVar=WEZTERM_USER=YWxpY2U=") + osc("1337;File=name=eC5wbmc=:AAAA")
+	p.Feed([]byte(osc("133;C;") + other + osc("133;D;0")))
+	if len(c.outs) != 4 || c.outs[3] != other {
+		t.Fatalf("foreign 1337 not preserved: %q", c.outs[3])
+	}
+	if len(c.hints) != 2 {
+		t.Fatalf("foreign 1337 produced a hint: %q", c.hints)
+	}
+}
+
+func TestParseOSC7Schemes(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"file://host/home/u/dir", "/home/u/dir"},
+		{"file:///home/u/dir", "/home/u/dir"},
+		{"file://host/with%20space", "/with space"},
+		{"kitty-shell-cwd://host/home/u/dir", "/home/u/dir"},
+		{"/plain/path", "/plain/path"},
+	}
+	for _, c := range cases {
+		if got := parseOSC7(c.in); got != c.want {
+			t.Errorf("parseOSC7(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// wezterm.sh's __wezterm_set_user_var uses an UNQUOTED `echo -n | base64`
+// substitution; GNU base64 wraps at 76 cols, the shell word-splits the
+// lines, and printf re-uses its format — so long command lines arrive as
+// a 76-char first chunk plus garbage SetUserVar=<line>=<line> sequences.
+// The parser must reassemble them (and consume the shrapnel).
+func wezSplit(cmd string) []string {
+	b64 := base64.StdEncoding.EncodeToString([]byte(cmd))
+	var lines []string
+	for len(b64) > 76 {
+		lines, b64 = append(lines, b64[:76]), b64[76:]
+	}
+	lines = append(lines, b64)
+	oscs := []string{osc("1337;SetUserVar=WEZTERM_PROG=" + lines[0])}
+	rest := lines[1:]
+	for len(rest) > 0 {
+		a := rest[0]
+		b := ""
+		if len(rest) > 1 {
+			b = rest[1]
+			rest = rest[2:]
+		} else {
+			rest = rest[1:]
+		}
+		oscs = append(oscs, osc("1337;SetUserVar="+a+"="+b))
+	}
+	return oscs
+}
+
+func TestWeztermProgWordSplit(t *testing.T) {
+	cases := []string{
+		"echo " + strings.Repeat("x", 120),  // 2 continuation lines (one pair)
+		"echo " + strings.Repeat("y", 215),  // odd lines -> trailing SetUserVar=<L>=
+		"echo " + strings.Repeat("z", 119),  // final line carries '=' padding
+		strings.Repeat("a", 57),             // exactly 76 b64 chars: no continuation at all
+	}
+	for _, cmd := range cases {
+		p, c := collector()
+		stream := osc("133;C;")
+		for _, o := range wezSplit(cmd) {
+			stream += o
+		}
+		stream += "out" + osc("133;D;0")
+		p.Feed([]byte(stream))
+		if len(c.hints) != 1 || c.hints[0] != cmd {
+			t.Fatalf("cmd len %d: hints = %d %.40q", len(cmd), len(c.hints), c.hints)
+		}
+		if len(c.outs) != 1 || c.outs[0] != "out" {
+			t.Fatalf("cmd len %d: shrapnel leaked into output: %q", len(cmd), c.outs)
+		}
+	}
+}
+
+// A pending chunk must be flushed (not swallowed) when the next OSC is a
+// real user var, and that var must still pass through into capture.
+func TestWeztermProgPendingFlushedByRealVar(t *testing.T) {
+	p, c := collector()
+	cmd := strings.Repeat("a", 57) // exactly one full 76-char b64 line
+	b64 := base64.StdEncoding.EncodeToString([]byte(cmd))
+	userVar := osc("1337;SetUserVar=WEZTERM_USER=YWxpY2U=")
+	p.Feed([]byte(osc("133;C;") + osc("1337;SetUserVar=WEZTERM_PROG="+b64) +
+		userVar + "out" + osc("133;D;0")))
+	if len(c.hints) != 1 || c.hints[0] != cmd {
+		t.Fatalf("hints = %q", c.hints)
+	}
+	if len(c.outs) != 1 || c.outs[0] != userVar+"out" {
+		t.Fatalf("outs = %q", c.outs)
+	}
+}
+
+// Raw newlines inside a single payload (what a fixed/quoted wezterm.sh
+// would send, post-ONLCR) must also decode.
+func TestWeztermProgHintCRLF(t *testing.T) {
+	long := "echo " + strings.Repeat("x", 120)
+	b64 := base64.StdEncoding.EncodeToString([]byte(long))
+	wrapped := ""
+	for i, ch := range b64 {
+		if i > 0 && i%76 == 0 {
+			wrapped += "\r\n"
+		}
+		wrapped += string(ch)
+	}
+	var got string
+	p := NewParser(Events{CmdHint: func(s string) { got = s }})
+	p.Feed([]byte(osc("133;C;") + osc("1337;SetUserVar=WEZTERM_PROG="+wrapped) + "out" + osc("133;D;0")))
+	if got != long {
+		t.Fatalf("got len=%d want len=%d", len(got), len(long))
 	}
 }

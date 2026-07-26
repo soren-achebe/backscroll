@@ -125,6 +125,14 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 > command text, exit codes, and cwd — with no snippet installed. The 633
 > metadata is consumed, never stored into recorded output.
 
+> **kitty or WezTerm shell integration in your rc file?** Same story:
+> kitty's `kitty.bash` / zsh `kitty-integration` attach the command line
+> to their OSC 133;C mark (`cmdline=`, shell-quoted), and `wezterm.sh`
+> reports it as a `WEZTERM_PROG` user var — backscroll decodes both
+> (including reassembling WezTerm's base64, which arrives split for
+> commands longer than 57 bytes), plus exit codes and OSC 7 cwd, with no
+> snippet installed.
+
 1. Add the integration to your shell rc (inert outside recorded sessions):
 
    ```sh

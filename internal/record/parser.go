@@ -40,6 +40,7 @@ type Parser struct {
 	csi       bytes.Buffer
 	capturing bool
 	altScreen bool
+	wezProg   []byte // partial base64 of a word-split WEZTERM_PROG (see handleOSC)
 }
 
 func NewParser(ev Events) *Parser {
@@ -179,6 +180,18 @@ func (p *Parser) markD(rest string) {
 }
 
 func (p *Parser) handleOSC(payload string, out *[]byte) {
+	// A pending word-split WEZTERM_PROG (see the 1337 case below) is
+	// continued by the very next OSCs or ended by anything else. Flushing
+	// before normal handling means the reassembled hint is in place
+	// before a following 133;D triggers the command flush.
+	if len(p.wezProg) > 0 {
+		if frag, ok := wezContinuation(payload); ok {
+			p.wezProg = append(p.wezProg, frag...)
+			return
+		}
+		p.emitWezProg(string(p.wezProg))
+		p.wezProg = p.wezProg[:0]
+	}
 	switch {
 	case strings.HasPrefix(payload, "133;"):
 		rest := payload[4:]
@@ -190,9 +203,21 @@ func (p *Parser) handleOSC(payload string, out *[]byte) {
 			// percent-encoded C-mark parameter. Surface it as a hint so
 			// sessions without our snippet still get command text.
 			if strings.HasPrefix(rest, "C;") && p.ev.CmdHint != nil {
-				for _, param := range strings.Split(rest[2:], ";") {
-					if enc, found := strings.CutPrefix(param, "cmdline_url="); found {
-						p.ev.CmdHint(percentDecode(enc))
+				params := rest[2:]
+				if q, found := strings.CutPrefix(params, "cmdline="); found {
+					// kitty's bash/zsh integrations attach the command
+					// line shell-quoted (printf %q). %q output can
+					// contain raw semicolons (`\;`, or inside $'...'),
+					// so the whole tail is the value — kitty emits no
+					// further params after it.
+					if cmd := shellUnquote(q); cmd != "" {
+						p.ev.CmdHint(cmd)
+					}
+				} else {
+					for _, param := range strings.Split(params, ";") {
+						if enc, found := strings.CutPrefix(param, "cmdline_url="); found {
+							p.ev.CmdHint(percentDecode(enc))
+						}
 					}
 				}
 			}
@@ -235,6 +260,35 @@ func (p *Parser) handleOSC(payload string, out *[]byte) {
 		}
 		// A/B/F/G/P;*/Env* etc.: prompt boundaries and terminal metadata;
 		// nothing to capture.
+	case strings.HasPrefix(payload, "1337;SetUserVar=WEZTERM_PROG="):
+		// WezTerm's shell integration reports the command line at preexec
+		// as a base64 user var (after its plain `133;C;` mark). It's the
+		// only command-text source in a manually-installed wezterm.sh
+		// setup, so surface it as a hint. Consumed, not stored: it is
+		// host-terminal state, and replaying it would clobber the user's
+		// live WEZTERM_PROG. An empty value (sent at precmd to clear the
+		// var) is ignored. All other OSC 1337 (SetUserVar for other
+		// vars, iTerm2 File= inline images, ...) passes through
+		// untouched below.
+		//
+		// Word-splitting gotcha: __wezterm_set_user_var encodes with an
+		// UNQUOTED `echo -n ... | base64` substitution. GNU base64 wraps
+		// at 76 columns, the shell word-splits the lines, and printf
+		// re-uses its format string for the extras — so any value longer
+		// than 57 bytes arrives as SetUserVar=WEZTERM_PROG=<first 76
+		// chars> followed by garbage sequences SetUserVar=<line>=<line>
+		// pairing up the remaining lines. A bare 76-char first chunk
+		// therefore means "possibly split": buffer it and reassemble
+		// from the continuations (they are back-to-back writes from one
+		// printf; anything else ends the sequence). Also strip embedded
+		// whitespace so a future quoted-substitution wezterm.sh (raw
+		// newlines in one payload) decodes too.
+		enc := stripSpace(payload[len("1337;SetUserVar=WEZTERM_PROG="):])
+		if len(enc) == 76 {
+			p.wezProg = append(p.wezProg[:0], enc...)
+		} else {
+			p.emitWezProg(enc)
+		}
 	case strings.HasPrefix(payload, "6973;cmd="):
 		if raw, err := base64.StdEncoding.DecodeString(payload[len("6973;cmd="):]); err == nil {
 			if p.ev.CmdText != nil {
@@ -262,8 +316,68 @@ func (p *Parser) handleOSC(payload string, out *[]byte) {
 }
 
 // parseOSC7 turns "file://host/path" into a plain path.
+// emitWezProg decodes a (possibly reassembled) WEZTERM_PROG value and
+// surfaces it as a command hint.
+func (p *Parser) emitWezProg(enc string) {
+	if p.ev.CmdHint == nil || enc == "" {
+		return
+	}
+	if raw, err := base64.StdEncoding.DecodeString(enc); err == nil && len(raw) > 0 {
+		p.ev.CmdHint(string(raw))
+	}
+}
+
+// wezContinuation reports whether an OSC payload is a continuation of a
+// word-split SetUserVar value: SetUserVar=<b64 line>=<b64 line>, where
+// printf paired up two leftover lines (the second may be empty, and only
+// the trailing fragment may carry '=' padding). Returns the concatenated
+// base64 fragments.
+func wezContinuation(payload string) (string, bool) {
+	rest, found := strings.CutPrefix(payload, "1337;SetUserVar=")
+	if !found {
+		return "", false
+	}
+	i := strings.IndexByte(rest, '=')
+	if i <= 0 {
+		return "", false
+	}
+	a, b := rest[:i], rest[i+1:]
+	if !isB64(a, false) || !isB64(b, true) {
+		return "", false
+	}
+	return a + b, true
+}
+
+// isB64 reports whether s consists only of base64 alphabet characters,
+// optionally followed by '=' padding. Real user-var names (WEZTERM_USER,
+// ...) contain '_' and never match.
+func isB64(s string, allowPad bool) bool {
+	i := 0
+	for ; i < len(s); i++ {
+		c := s[i]
+		if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+			(c >= '0' && c <= '9') || c == '+' || c == '/' {
+			continue
+		}
+		break
+	}
+	if allowPad {
+		for ; i < len(s); i++ {
+			if s[i] != '=' {
+				return false
+			}
+		}
+	}
+	return i == len(s)
+}
+
 func parseOSC7(s string) string {
-	s = strings.TrimPrefix(s, "file://")
+	// Strip scheme + authority, keep the path. Emitters differ on the
+	// scheme: file:// (wezterm, VS Code, our snippets) vs
+	// kitty-shell-cwd:// (kitty's shell integration).
+	if i := strings.Index(s, "://"); i >= 0 {
+		s = s[i+3:]
+	}
 	if i := strings.IndexByte(s, '/'); i >= 0 {
 		s = s[i:]
 	}

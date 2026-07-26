@@ -53,6 +53,25 @@ jobs:
           echo "$VSC_SUM  /tmp/vsc-bash.sh" | sha256sum -c -
           BKS_BIN="$PWD/backscroll" BKS_TEST_VSC_SH=/tmp/vsc-bash.sh \
             python3 shell/test_vscode_633.py
+      - name: E2E test against kitty + wezterm shell integration (zero-config)
+        if: runner.os == 'Linux'
+        run: |
+          # Pinned upstream integration scripts, fetched for testing only
+          # (not vendored; kitty is GPLv3, wezterm is MIT). Update the
+          # commit SHAs and checksums together.
+          KITTY_SHA=fd7e43ab0c89760528c823f1c7c6629c34594cf8
+          WEZ_SHA=76b606ec597a3c0263fa60321548637451c0a547
+          curl -sL -o /tmp/kitty.bash "https://raw.githubusercontent.com/kovidgoyal/kitty/$KITTY_SHA/shell-integration/bash/kitty.bash"
+          curl -sL -o /tmp/kitty-integration "https://raw.githubusercontent.com/kovidgoyal/kitty/$KITTY_SHA/shell-integration/zsh/kitty-integration"
+          curl -sL -o /tmp/wezterm.sh "https://raw.githubusercontent.com/wezterm/wezterm/$WEZ_SHA/assets/shell-integration/wezterm.sh"
+          sha256sum -c - <<'SUMS'
+          cb5b33310bae23aa47ec342a4d843b046dfa9a804ae5a8e57a2c356c55edf5a9  /tmp/kitty.bash
+          46fbd99d41e51a4b655b3e828ebf4b6a80ebed9f95e076be69bddf0a384fdf56  /tmp/kitty-integration
+          8635895db5fd8828e6f7654e015ddb8564ccec21179d2aca627e0329edf9b408  /tmp/wezterm.sh
+          SUMS
+          BKS_BIN="$PWD/backscroll" BKS_TEST_KITTY_BASH=/tmp/kitty.bash \
+            BKS_TEST_KITTY_ZSH=/tmp/kitty-integration BKS_TEST_WEZTERM_SH=/tmp/wezterm.sh \
+            python3 shell/test_kitty_wezterm.py
       - name: cache bash 3.2.57
         if: runner.os == 'Linux'
         uses: actions/cache@v4
