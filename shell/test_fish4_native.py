@@ -84,6 +84,17 @@ class LogBuf:
         return b"".join(self.chunks)
 
 
+def session_env(home):
+    """Isolated env: fresh HOME wins even if the runner sets XDG_* dirs."""
+    env = dict(os.environ, HOME=home, TERM="xterm-256color", SHELL=FISH4,
+               XDG_CONFIG_HOME=os.path.join(home, ".config"),
+               XDG_DATA_HOME=os.path.join(home, ".local", "share"))
+    for k in list(env):
+        if k.startswith("BACKSCROLL_"):
+            del env[k]
+    return env
+
+
 def run_session(home, snippet):
     """Run `backscroll run` with fish4 as $SHELL; return the raw stream."""
     shutil.rmtree(home, ignore_errors=True)
@@ -92,7 +103,7 @@ def run_session(home, snippet):
         with open(os.path.join(home, ".config", "fish", "config.fish"), "w") as f:
             f.write(f"{BKS} init fish | source\n")
 
-    env = dict(os.environ, HOME=home, TERM="xterm-256color", SHELL=FISH4)
+    env = session_env(home)
     log = LogBuf()
     child = pexpect.spawn(BKS, ["run"], env=env, timeout=10,
                           dimensions=(24, 120))
@@ -144,7 +155,7 @@ def db_rows(home):
     rows = []
     for n in range(1, 20):
         out = subprocess.run([BKS, "export", "--format", "json", f"-{n}"],
-                             env=dict(os.environ, HOME=home),
+                             env=session_env(home),
                              capture_output=True, text=True)
         if out.returncode != 0:
             break
@@ -184,7 +195,9 @@ with tempfile.TemporaryDirectory() as tmp:
     assert_session("fish4 + snippet (double emission)", home_b)
     check("fish4 + snippet: both mark sources present in stream",
           b"cmdline_url=" in raw and b"6973;cmd=" in raw,
-          "expected native cmdline_url AND snippet 6973 marks")
+          f"cmdline_url={b'cmdline_url=' in raw} 6973={b'6973;cmd=' in raw} "
+          "(6973 missing usually means the snippet never loaded — check "
+          "XDG_CONFIG_HOME isolation)")
 
 print()
 if FAILURES:
