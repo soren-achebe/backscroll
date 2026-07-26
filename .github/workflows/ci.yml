@@ -129,3 +129,27 @@ jobs:
           python3 -m pip install --quiet --break-system-packages pexpect \
             || python3 -m pip install --quiet pexpect
           BKS_TEST_BASH=/bin/bash python3 shell/test_bash_integration.py
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: build image
+        run: docker build -t backscroll:ci .
+      - name: smoke test — MCP server responds to initialize + tools/list
+        run: |
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            | docker run -i --rm backscroll:ci > /tmp/out.jsonl
+          cat /tmp/out.jsonl
+          python3 - <<'PY'
+          import json
+          lines = [json.loads(l) for l in open("/tmp/out.jsonl") if l.strip()]
+          byid = {m.get("id"): m for m in lines if "id" in m}
+          assert "serverInfo" in byid[1]["result"], byid[1]
+          tools = {t["name"] for t in byid[2]["result"]["tools"]}
+          assert tools == {"search_output", "list_commands", "get_output", "diff_output"}, tools
+          print("docker MCP smoke test OK:", sorted(tools))
+          PY
