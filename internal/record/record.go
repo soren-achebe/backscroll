@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -146,11 +147,15 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 	defer ptmx.Close()
 
 	// resize handling
+	var cols atomic.Int32 // terminal width, for echo reconstruction
 	winch := make(chan os.Signal, 1)
 	signal.Notify(winch, syscall.SIGWINCH)
 	go func() {
 		for range winch {
 			_ = pty.InheritSize(os.Stdin, ptmx)
+			if w, _, err := term.GetSize(int(os.Stdin.Fd())); err == nil {
+				cols.Store(int32(w))
+			}
 		}
 	}()
 	winch <- syscall.SIGWINCH
@@ -181,6 +186,7 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 	var (
 		curCmd    string // authoritative, from our snippet's OSC 6973;cmd
 		curHint   string // emitter-provided fallback (fish ≥4.0 cmdline_url)
+		curEcho   string // reconstructed from the input echo (plain-133 emitters)
 		curCwd    string
 		buf       *capBuf
 		startedAt time.Time
@@ -190,12 +196,18 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 	ignorePats := LoadIgnore()
 	// cmdName is the best-known text for the in-flight command: our
 	// snippet's OSC 6973 wins; an emitter-provided C-mark hint (fish ≥4.0
-	// native marks) fills in when the snippet isn't installed.
+	// native marks, VS Code 633;E, kitty, WezTerm) fills in when the
+	// snippet isn't installed; last resort is reconstructing the typed
+	// line from its terminal echo (plain-133 emitters like Ghostty and
+	// iTerm2, which mark boundaries but never report the command text).
 	cmdName := func() string {
 		if curCmd != "" {
 			return curCmd
 		}
-		return curHint
+		if curHint != "" {
+			return curHint
+		}
+		return curEcho
 	}
 	flush := func(exitCode int, hasExit bool) {
 		if buf == nil {
@@ -207,7 +219,7 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 			// a command anyone wants to recall (fish emits a D mark for it,
 			// unlike bash/zsh, so it would otherwise be stored).
 			buf = nil
-			curCmd, curHint = "", ""
+			curCmd, curHint, curEcho = "", "", ""
 			return
 		}
 		raw := buf.Bytes()
@@ -226,7 +238,7 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 				// output. A real command always leaves text, an exit
 				// code, or command text.
 				buf = nil
-				curCmd, curHint = "", ""
+				curCmd, curHint, curEcho = "", "", ""
 				return
 			}
 			if t := strings.TrimSpace(string(plain)); t == "exit" || t == "logout" {
@@ -237,7 +249,7 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 				// emitters like Ghostty open a C for `exit` that never
 				// gets a D.)
 				buf = nil
-				curCmd, curHint = "", ""
+				curCmd, curHint, curEcho = "", "", ""
 				return
 			}
 		}
@@ -250,12 +262,13 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 		}
 		recorded++
 		buf = nil
-		curCmd, curHint = "", ""
+		curCmd, curHint, curEcho = "", "", ""
 	}
 
 	parser := NewParser(Events{
 		CmdText: func(c string) { curCmd = c },
 		CmdHint: func(c string) { curHint = c },
+		Echo:    func(b []byte) { curEcho = ReconstructEcho(b, int(cols.Load())) },
 		Cwd:     func(p string) { curCwd = p },
 		OutStart: func() {
 			buf = newCapBuf(headCap, tailCap)

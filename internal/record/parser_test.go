@@ -511,10 +511,10 @@ func wezSplit(cmd string) []string {
 
 func TestWeztermProgWordSplit(t *testing.T) {
 	cases := []string{
-		"echo " + strings.Repeat("x", 120),  // 2 continuation lines (one pair)
-		"echo " + strings.Repeat("y", 215),  // odd lines -> trailing SetUserVar=<L>=
-		"echo " + strings.Repeat("z", 119),  // final line carries '=' padding
-		strings.Repeat("a", 57),             // exactly 76 b64 chars: no continuation at all
+		"echo " + strings.Repeat("x", 120), // 2 continuation lines (one pair)
+		"echo " + strings.Repeat("y", 215), // odd lines -> trailing SetUserVar=<L>=
+		"echo " + strings.Repeat("z", 119), // final line carries '=' padding
+		strings.Repeat("a", 57),            // exactly 76 b64 chars: no continuation at all
 	}
 	for _, cmd := range cases {
 		p, c := collector()
@@ -567,5 +567,129 @@ func TestWeztermProgHintCRLF(t *testing.T) {
 	p.Feed([]byte(osc("133;C;") + osc("1337;SetUserVar=WEZTERM_PROG="+wrapped) + "out" + osc("133;D;0")))
 	if got != long {
 		t.Fatalf("got len=%d want len=%d", len(got), len(long))
+	}
+}
+
+// echoCollector wires an Echo handler into the standard collector.
+func echoCollector() (*Parser, *collected, *[]string) {
+	p, c := collector()
+	echoes := &[]string{}
+	p.ev.Echo = func(b []byte) { *echoes = append(*echoes, string(b)) }
+	return p, c, echoes
+}
+
+func TestEchoRegionCaptured(t *testing.T) {
+	p, c, echoes := echoCollector()
+	p.Feed([]byte(osc("133;A") + "prompt$ " + osc("133;B") + "ls -la\r\n" +
+		osc("133;C") + "total 0\r\n" + osc("133;D;0")))
+	if len(*echoes) != 1 || (*echoes)[0] != "ls -la\r\n" {
+		t.Fatalf("echoes = %q", *echoes)
+	}
+	// prompt text before B must not leak into the region
+	if strings.Contains((*echoes)[0], "prompt") {
+		t.Fatalf("prompt leaked: %q", (*echoes)[0])
+	}
+	// and output capture is unaffected
+	if len(c.outs) != 1 || c.outs[0] != "total 0\r\n" {
+		t.Fatalf("outs = %q", c.outs)
+	}
+}
+
+func TestEchoRegionResetOnPromptRedraw(t *testing.T) {
+	// Ctrl-L: emitters embed B in PS1, so the redraw re-fires it; the
+	// reprinted prompt text lands in the buffer and the new B discards it
+	p, _, echoes := echoCollector()
+	p.Feed([]byte(osc("133;B") + "old typing\x1b[H\x1b[2J" + "prompt$ " +
+		osc("133;B") + "make\r\n" + osc("133;C") + osc("133;D;0")))
+	if len(*echoes) != 1 || (*echoes)[0] != "make\r\n" {
+		t.Fatalf("echoes = %q", *echoes)
+	}
+}
+
+func TestEchoRegionPS2Continues(t *testing.T) {
+	// a secondary prompt (133;P;k=s before its B) continues the region
+	p, _, echoes := echoCollector()
+	p.Feed([]byte(osc("133;P;k=i") + "$ " + osc("133;B") + "for f in *; do\r\n" +
+		osc("133;P;k=s") + "> " + osc("133;B") + "echo $f; done\r\n" +
+		osc("133;C") + osc("133;D;0")))
+	want := "for f in *; do\r\n> echo $f; done\r\n"
+	if len(*echoes) != 1 || (*echoes)[0] != want {
+		t.Fatalf("echoes = %q, want %q", *echoes, want)
+	}
+}
+
+func TestEchoRegionAbandonedOnA(t *testing.T) {
+	// Ctrl-C at a half-typed line: new prompt cycle (A) without a C —
+	// the abandoned input must not attach to the next command
+	p, _, echoes := echoCollector()
+	p.Feed([]byte(osc("133;B") + "half typed^C" + osc("133;A") + "$ " +
+		osc("133;B") + "true\r\n" + osc("133;C") + osc("133;D;0")))
+	if len(*echoes) != 1 || (*echoes)[0] != "true\r\n" {
+		t.Fatalf("echoes = %q", *echoes)
+	}
+}
+
+func TestEchoRegionOverflowDiscarded(t *testing.T) {
+	p, _, echoes := echoCollector()
+	big := strings.Repeat("x", echoCap+1)
+	p.Feed([]byte(osc("133;B") + big + osc("133;C") + osc("133;D;0")))
+	if len(*echoes) != 0 {
+		t.Fatalf("oversized region should be discarded, got %d echoes", len(*echoes))
+	}
+	// and the next region is captured normally again
+	p.Feed([]byte(osc("133;B") + "ls\r\n" + osc("133;C") + osc("133;D;0")))
+	if len(*echoes) != 1 || (*echoes)[0] != "ls\r\n" {
+		t.Fatalf("echoes = %q", *echoes)
+	}
+}
+
+func TestEchoRegionKeepsCSIDropsOSC(t *testing.T) {
+	// CSI sequences are needed by the reconstructor; OSC marks/titles are
+	// metadata and stay out
+	p, _, echoes := echoCollector()
+	p.Feed([]byte(osc("133;B") + "l\x1b[32ms\x1b[0m" + osc("2;title") + "\r\n" +
+		osc("133;C") + osc("133;D;0")))
+	want := "l\x1b[32ms\x1b[0m\r\n"
+	if len(*echoes) != 1 || (*echoes)[0] != want {
+		t.Fatalf("echoes = %q, want %q", *echoes, want)
+	}
+}
+
+func TestEchoRegionChunked(t *testing.T) {
+	// marks and echo bytes split across arbitrary feed boundaries
+	stream := []byte(osc("133;B") + "git status\r\n" + osc("133;C") + "clean\r\n" + osc("133;D;0"))
+	for chunk := 1; chunk <= 7; chunk++ {
+		p, c, echoes := echoCollector()
+		for i := 0; i < len(stream); i += chunk {
+			end := i + chunk
+			if end > len(stream) {
+				end = len(stream)
+			}
+			p.Feed(stream[i:end])
+		}
+		if len(*echoes) != 1 || (*echoes)[0] != "git status\r\n" {
+			t.Fatalf("chunk=%d: echoes = %q", chunk, *echoes)
+		}
+		if len(c.outs) != 1 || c.outs[0] != "clean\r\n" {
+			t.Fatalf("chunk=%d: outs = %q", chunk, c.outs)
+		}
+	}
+}
+
+func TestEchoNoBNoRegion(t *testing.T) {
+	// C/D-only emitters (our own snippet): no B mark, no echo event
+	p, _, echoes := echoCollector()
+	p.Feed([]byte("typed" + mark("typed") + "out" + osc("133;D;0")))
+	if len(*echoes) != 0 {
+		t.Fatalf("expected no echo without B, got %q", *echoes)
+	}
+}
+
+func TestEchoRegion633(t *testing.T) {
+	p, _, echoes := echoCollector()
+	p.Feed([]byte(osc("633;A") + "$ " + osc("633;B") + "pwd\r\n" +
+		osc("633;C") + "/tmp\r\n" + osc("633;D;0")))
+	if len(*echoes) != 1 || (*echoes)[0] != "pwd\r\n" {
+		t.Fatalf("echoes = %q", *echoes)
 	}
 }

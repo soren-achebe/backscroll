@@ -18,6 +18,7 @@ type Events struct {
 	Cwd      func(path string)           // OSC 7;file://host/path
 	Output   func(b []byte)              // raw output bytes between C and D (alt-screen excluded)
 	Toggle   func(on bool)               // OSC 6973;rec=on|off — pause/resume recording
+	Echo     func(b []byte)              // raw input-echo bytes between B and C (see ReconstructEcho)
 }
 
 type pstate int
@@ -41,6 +42,15 @@ type Parser struct {
 	capturing bool
 	altScreen bool
 	wezProg   []byte // partial base64 of a word-split WEZTERM_PROG (see handleOSC)
+
+	// Input-echo capture (B..C region). Plain-133 emitters never report
+	// the command text; the echoed keystrokes between the B (input
+	// starts) and C (execution starts) marks are the only trace of it.
+	// The raw region is handed to ev.Echo at C time for reconstruction.
+	echoing  bool // between a B mark and the next C/D/A
+	echo     bytes.Buffer
+	echoOver bool // region exceeded echoCap: discard, don't truncate
+	promptK  byte // kind from the last 133;P;k=<kind> mark (kitty protocol)
 }
 
 func NewParser(ev Events) *Parser {
@@ -68,12 +78,16 @@ func (p *Parser) Feed(chunk []byte) {
 			if j < 0 {
 				if p.capturing && !p.altScreen {
 					out = append(out, chunk[i:]...)
+				} else if p.echoing {
+					p.echoAdd(chunk[i:])
 				}
 				i = len(chunk) // done
 				continue
 			}
 			if p.capturing && !p.altScreen {
 				out = append(out, chunk[i:i+j]...)
+			} else if p.echoing {
+				p.echoAdd(chunk[i : i+j])
 			}
 			i += j // chunk[i] is now the ESC; loop increment skips it
 			p.st = sEsc
@@ -89,6 +103,8 @@ func (p *Parser) Feed(chunk []byte) {
 				// some other escape sequence; pass its bytes into capture
 				if p.capturing && !p.altScreen {
 					out = append(out, 0x1b, b)
+				} else if p.echoing {
+					p.echoAdd([]byte{0x1b, b})
 				}
 				p.st = sNorm
 			}
@@ -123,6 +139,9 @@ func (p *Parser) Feed(chunk []byte) {
 				if p.capturing && !p.altScreen {
 					out = append(out, 0x1b, '[')
 					out = append(out, seq...)
+				} else if p.echoing {
+					p.echoAdd([]byte{0x1b, '['})
+					p.echoAdd([]byte(seq))
 				}
 				p.st = sNorm
 			} else if p.csi.Len() > maxSeqLen {
@@ -152,10 +171,53 @@ func (p *Parser) handleCSI(seq string) {
 	}
 }
 
+func (p *Parser) echoAdd(b []byte) {
+	if p.echoOver {
+		return
+	}
+	if p.echo.Len()+len(b) > echoCap {
+		// A region this big is a paste gone wrong or UI noise, and a
+		// truncated echo reconstructs to the wrong command — discard it
+		// entirely rather than keep a misleading prefix.
+		p.echoOver = true
+		p.echo.Reset()
+		return
+	}
+	p.echo.Write(b)
+}
+
+func (p *Parser) echoReset() {
+	p.echoing = false
+	p.echoOver = false
+	p.echo.Reset()
+}
+
+// markB handles an input-start mark (OSC 133;B / 633;B): the prompt is
+// drawn, user keystrokes echo from here until the C mark. A B mark also
+// re-fires on every prompt redraw (emitters embed it in PS1, so Ctrl-L
+// reprints it) — resetting the buffer then is exactly right, because the
+// redrawn prompt text that just polluted the region is discarded. The one
+// exception is a continuation prompt (PS2, marked 133;P;k=s in the kitty
+// prompt protocol): its B continues the same logical command, so the
+// earlier lines are kept.
+func (p *Parser) markB() {
+	if p.promptK != 's' {
+		p.echoReset()
+	}
+	p.promptK = 0
+	p.echoing = true
+}
+
 // markC handles a pre-execution mark (OSC 133;C / 633;C): output begins.
 func (p *Parser) markC() {
 	p.capturing = true
 	p.altScreen = false
+	if p.echoing && !p.echoOver && p.echo.Len() > 0 && p.ev.Echo != nil {
+		b := make([]byte, p.echo.Len())
+		copy(b, p.echo.Bytes())
+		p.ev.Echo(b)
+	}
+	p.echoReset()
 	if p.ev.OutStart != nil {
 		p.ev.OutStart()
 	}
@@ -164,6 +226,7 @@ func (p *Parser) markC() {
 // markD handles a command-finished mark (OSC 133;D / 633;D), rest is the
 // payload after "133;"/"633;" (i.e. "D" or "D;<code>[;...]").
 func (p *Parser) markD(rest string) {
+	p.echoReset() // safety: a D mark always ends any input region
 	if !p.capturing {
 		return
 	}
@@ -223,8 +286,22 @@ func (p *Parser) handleOSC(payload string, out *[]byte) {
 			}
 		case rest == "D" || strings.HasPrefix(rest, "D;"):
 			p.markD(rest)
+		case rest == "A" || strings.HasPrefix(rest, "A;"):
+			// new prompt cycle: any un-executed input echo is stale
+			p.echoReset()
+			p.promptK = 0
+		case rest == "B" || strings.HasPrefix(rest, "B;"):
+			p.markB()
+		case strings.HasPrefix(rest, "P;"):
+			// kitty prompt-kind mark: k=s flags a secondary (PS2)
+			// prompt, whose B mark continues the current input region
+			p.promptK = 0
+			for _, param := range strings.Split(rest[2:], ";") {
+				if v, found := strings.CutPrefix(param, "k="); found && v != "" {
+					p.promptK = v[0]
+				}
+			}
 		}
-		// A and B marks are prompt boundaries; nothing to capture there.
 	case strings.HasPrefix(payload, "633;"):
 		// VS Code's shell-integration protocol (OSC 633) — same A/B/C/D
 		// shape as OSC 133, plus E (the literal command line) and
@@ -241,6 +318,10 @@ func (p *Parser) handleOSC(payload string, out *[]byte) {
 			p.markC()
 		case rest == "D" || strings.HasPrefix(rest, "D;"):
 			p.markD(rest)
+		case rest == "A" || strings.HasPrefix(rest, "A;"):
+			p.echoReset()
+		case rest == "B" || strings.HasPrefix(rest, "B;"):
+			p.markB()
 		case strings.HasPrefix(rest, "E;"):
 			// 633;E;<cmdline>;<nonce> — nonce is optional; semicolons
 			// inside the command are escaped as \x3b, so splitting on the
