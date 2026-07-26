@@ -92,6 +92,22 @@ jobs:
           BKS_BIN="$PWD/backscroll" BKS_TEST_GHOSTTY_BASH=/tmp/ghostty.bash \
             BKS_TEST_GHOSTTY_ZSH=/tmp/ghostty-integration \
             python3 shell/test_ghostty.py
+      - name: E2E test against iTerm2 shell integration (zero-config)
+        if: runner.os == 'Linux'
+        run: |
+          # Pinned upstream integration scripts, fetched for testing only
+          # (not vendored; iTerm2's scripts are GPLv2). Update the commit
+          # SHA and checksums together.
+          ITERM2_SHA=a34730dbd2d77f5a4b64205eb83c1b483307d707
+          curl -sL -o /tmp/iterm2.bash "https://raw.githubusercontent.com/gnachman/iTerm2-shell-integration/$ITERM2_SHA/shell_integration/bash"
+          curl -sL -o /tmp/iterm2.zsh "https://raw.githubusercontent.com/gnachman/iTerm2-shell-integration/$ITERM2_SHA/shell_integration/zsh"
+          sha256sum -c - <<'SUMS'
+          c8754d9c35bc24934be7ab20735651c9a019bd2b442ebfb41d9103e62e95c5b0  /tmp/iterm2.bash
+          20e90813ba1a1703cdf05df724a042d7ce69857273e933d0411fee7f2b20f09f  /tmp/iterm2.zsh
+          SUMS
+          BKS_BIN="$PWD/backscroll" BKS_TEST_ITERM2_BASH=/tmp/iterm2.bash \
+            BKS_TEST_ITERM2_ZSH=/tmp/iterm2.zsh \
+            python3 shell/test_iterm2.py
       - name: cache bash 3.2.57
         if: runner.os == 'Linux'
         uses: actions/cache@v4
