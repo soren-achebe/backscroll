@@ -354,7 +354,10 @@ func (s *mcpServer) toolSearch(raw json.RawMessage) any {
 	if err != nil {
 		return errResult("%v", err)
 	}
-	cmds, err := s.st.Search(a.Query, f)
+	// trigram tokenizer: quote so natural strings (hyphens, dots, FTS
+	// operators) search literally — same treatment as `backscroll search`.
+	q := `"` + strings.ReplaceAll(a.Query, `"`, `""`) + `"`
+	cmds, err := s.st.Search(q, f)
 	if err != nil {
 		return errResult("search failed: %v", err)
 	}
