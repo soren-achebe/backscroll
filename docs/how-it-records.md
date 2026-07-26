@@ -146,6 +146,58 @@ sequences routinely land in the middle of words (`conn` + SGR reset +
 `ection`), so an index over raw bytes silently fails to match the exact
 error message you're searching for.
 
+## Recovering the command from its echo
+
+Plain-OSC 133 emitters (Ghostty, iTerm2, Windows Terminal, manually
+installed integration scripts) mark where the prompt ends (`B`) and
+where execution starts (`C`) — but never say what the command *was*.
+The recorder still holds the missing piece: everything the shell
+**echoed** between those two marks is the user's typing, as rendered by
+readline/ZLE — keystrokes interleaved with backspace rubouts, cursor
+motion, completion redraws, syntax-highlight recoloring, and whatever
+an fzf popup splattered on the screen.
+
+So when no better source exists, backscroll replays that region through
+a small prompt-relative grid emulator and stores the final visible
+line. The priority order is: our snippet's OSC 6973 text (authoritative)
+→ an emitter-provided cmdline (fish ≥ 4.0, VS Code `633;E`, kitty,
+WezTerm) → echo reconstruction.
+
+Three details make this honest rather than hopeful:
+
+- **The prompt must be replayed too.** The `B` mark fires with the
+  cursor *after* the prompt, and line-editor redraws are computed from
+  that true position. ZLE's wrapped-line handling writes a character at
+  the last column to force the wrap, then `CR` + erase-line + rewrite on
+  the next row — replayed from column 0 instead of column
+  `len(prompt)`, that erase lands on the *first* row and destroys the
+  line (a 125-character command reconstructs as its last 7 characters;
+  this was found by diffing against a real VT emulator's render of the
+  same bytes). The parser therefore captures from the `A`/`133;P` mark
+  and phase-tags cells as prompt vs. input; only input cells are
+  extracted.
+- **Never-written ≠ space.** Cells track whether anything was ever
+  drawn there. A typed space writes its cell; a zsh `RPROMPT` jumps the
+  cursor and leaves a gap of untouched cells. That distinction lets
+  extraction trim right-aligned decorations without ever eating real
+  interior spacing.
+- **Refuse to guess.** Absolute cursor addressing or scroll regions
+  can't be mapped into a prompt-relative grid, so the reconstruction
+  aborts and the entry falls back to `(unknown command)` — a wrong
+  "command" in the database is strictly worse than an unlabeled one.
+  Same for oversized regions: a >32 KB paste is discarded, not
+  truncated into a misleading prefix. And a region whose input ends in
+  a bare `^C` (no echoed Enter before readline tears down bracketed
+  paste) is a line that was *killed*, not executed — some emitters
+  re-fire a phantom pre-exec mark on SIGINT, and without this check the
+  literal text `^C` gets stored as a command.
+
+The alternate screen is frozen during replay, so a full-screen fzf
+Ctrl-R session contributes nothing and the final readline redraw of the
+picked command is what survives. Multiline input works too: emitters
+that mark continuation prompts (`133;P;k=s`) get their PS2 `> `
+excluded from the reconstruction entirely.
+
 ## Session teardown is the hard part
 
 The happy path is easy. The paths that cost real debugging:

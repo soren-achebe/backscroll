@@ -133,14 +133,18 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 > commands longer than 57 bytes), plus exit codes and OSC 7 cwd, with no
 > snippet installed.
 
-> **Ghostty?** Its auto-injected integration coexists cleanly with
-> backscroll: with the snippet installed you get full fidelity, and even
-> with no snippet you still get outputs, cwd, and (zsh) exit codes —
-> though commands are labeled `(unknown command)` since Ghostty's marks
-> carry no command line, and its bash exit statuses are currently always
-> 0 due to an upstream script bug (see
-> [docs/osc133.md](docs/osc133.md), gotcha 15). Install the snippet for
-> the real thing.
+> **Ghostty (or any plain-OSC 133 terminal, e.g. iTerm2)?** Also
+> zero-config. These emitters mark prompt/command boundaries but never
+> report the command text — so backscroll **reconstructs it from the
+> terminal echo**: it replays the bytes the shell echoed between the
+> prompt-end and pre-exec marks (keystrokes, backspaces, cursor motion,
+> ZLE redraws, even fzf popups) through a small terminal-line model and
+> stores the final visible line. Real command text, outputs, cwd, and
+> (zsh) exit codes with no snippet installed. Ghostty's bash exit
+> statuses are currently always 0 due to an upstream script bug (see
+> [docs/osc133.md](docs/osc133.md), gotcha 15). The snippet is still
+> the gold path — its OSC 6973 text is authoritative and adds the
+> picker binding — and coexists cleanly.
 
 1. Add the integration to your shell rc (inert outside recorded sessions):
 
