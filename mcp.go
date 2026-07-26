@@ -162,13 +162,32 @@ func (s *mcpServer) initialize(params json.RawMessage) any {
 
 // ---- tools ----
 
+// roAnnotations marks a tool as a pure read of the local database: it never
+// executes commands, never modifies history, and touches nothing outside the
+// recorder's SQLite file.
+func roAnnotations(title string) map[string]any {
+	return map[string]any{
+		"title":           title,
+		"readOnlyHint":    true,
+		"destructiveHint": false,
+		"idempotentHint":  true,
+		"openWorldHint":   false,
+	}
+}
+
 var mcpTools = []map[string]any{
 	{
-		"name": "search_output",
-		"description": "Full-text search over recorded terminal commands AND their outputs. " +
-			"Finds e.g. every command that ever printed 'connection refused'. " +
-			"Returns matching commands with id, time, cwd, exit code and a snippet of the match. " +
-			"Use get_output with an id to read the full output.",
+		"name":        "search_output",
+		"title":       "Search command outputs",
+		"annotations": roAnnotations("Search command outputs"),
+		"description": "Full-text search over recorded terminal commands AND their outputs — " +
+			"finds e.g. every command that ever printed 'connection refused'. " +
+			"Returns plain text, one block per match: id, time, cwd, exit code, the command " +
+			"line, and a snippet around the match (secrets are masked by default). " +
+			"Use this to FIND which command said something; use list_commands to browse " +
+			"recent history without a search term, and get_output to read a full output " +
+			"once you have an id. No matches returns an empty result, not an error. " +
+			"Read-only: never re-runs anything.",
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -189,10 +208,16 @@ var mcpTools = []map[string]any{
 		},
 	},
 	{
-		"name": "list_commands",
-		"description": "List the user's recent terminal commands (most recent first) with id, " +
-			"time, cwd, exit code, duration and output size. Supports the same filters as " +
-			"search_output, e.g. exit='fail' for recent failures or cwd='.' for this project only.",
+		"name":        "list_commands",
+		"title":       "List recent commands",
+		"annotations": roAnnotations("List recent commands"),
+		"description": "List the user's recent terminal commands (most recent first) as plain " +
+			"text: one entry per command with id, time, cwd, exit code, duration and output " +
+			"size — command lines only, no output text. Supports the same filters as " +
+			"search_output, e.g. exit='fail' for recent failures or cwd='.' for this project " +
+			"only. Use this to browse history; use search_output when looking for specific " +
+			"text, and get_output to read what a command actually printed. " +
+			"Read-only: never re-runs anything.",
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -205,10 +230,17 @@ var mcpTools = []map[string]any{
 		},
 	},
 	{
-		"name": "get_output",
-		"description": "Get the full recorded output of one terminal command, plus its command line, " +
-			"exit code, cwd, timing. id: a command id from search_output/list_commands, or negative " +
-			"for relative addressing (-1 = the user's most recent command, -2 = the one before it).",
+		"name":        "get_output",
+		"title":       "Get a command's output",
+		"annotations": roAnnotations("Get a command's output"),
+		"description": "Get the full recorded output of one terminal command, plus its command " +
+			"line, exit code, cwd and timing, as plain text (ANSI escapes stripped; secrets " +
+			"masked by default). id: a command id from search_output/list_commands, or " +
+			"negative for relative addressing (-1 = the user's most recent command, -2 = the " +
+			"one before it). Outputs larger than max_bytes return the head and tail around a " +
+			"'[... N bytes omitted ...]' marker — call again with a larger max_bytes for more. " +
+			"Errors with 'not found' if the id doesn't exist. " +
+			"Read-only: reads the recording, never re-runs the command.",
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -221,10 +253,15 @@ var mcpTools = []map[string]any{
 		},
 	},
 	{
-		"name": "diff_output",
-		"description": "Unified diff between the outputs of two runs. With only 'id', diffs that " +
-			"command against the PREVIOUS run of the same command line — 'what changed since it " +
-			"last ran?'. With 'other', diffs the two given commands (other = older side).",
+		"name":        "diff_output",
+		"title":       "Diff two runs' outputs",
+		"annotations": roAnnotations("Diff two runs' outputs"),
+		"description": "Unified diff (diff -u style plain text) between the stored outputs of " +
+			"two runs. With only 'id', diffs that command against the most recent EARLIER run " +
+			"of the exact same command line — 'what changed since it last ran?'; errors if no " +
+			"earlier identical command line exists. With 'other', diffs the two given commands " +
+			"(other = older side). Identical outputs return a note saying so. Secrets are " +
+			"masked by default. Read-only: diffs recordings, never re-runs anything.",
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{

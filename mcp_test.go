@@ -163,8 +163,15 @@ func TestMCPHandshakeAndToolsList(t *testing.T) {
 	var tl struct {
 		Tools []struct {
 			Name        string          `json:"name"`
+			Title       string          `json:"title"`
 			Description string          `json:"description"`
 			InputSchema json.RawMessage `json:"inputSchema"`
+			Annotations struct {
+				Title           string `json:"title"`
+				ReadOnlyHint    *bool  `json:"readOnlyHint"`
+				DestructiveHint *bool  `json:"destructiveHint"`
+				OpenWorldHint   *bool  `json:"openWorldHint"`
+			} `json:"annotations"`
 		} `json:"tools"`
 	}
 	if err := json.Unmarshal(res, &tl); err != nil {
@@ -180,6 +187,21 @@ func TestMCPHandshakeAndToolsList(t *testing.T) {
 		}
 		if tool.Description == "" || len(tool.InputSchema) == 0 {
 			t.Errorf("tool %q missing description or schema", tool.Name)
+		}
+		// every backscroll tool is a pure read of the local DB; the
+		// annotations must say so.
+		if tool.Title == "" || tool.Annotations.Title == "" {
+			t.Errorf("tool %q missing title/annotations.title", tool.Name)
+		}
+		a := tool.Annotations
+		if a.ReadOnlyHint == nil || !*a.ReadOnlyHint {
+			t.Errorf("tool %q: readOnlyHint should be true", tool.Name)
+		}
+		if a.DestructiveHint == nil || *a.DestructiveHint {
+			t.Errorf("tool %q: destructiveHint should be false", tool.Name)
+		}
+		if a.OpenWorldHint == nil || *a.OpenWorldHint {
+			t.Errorf("tool %q: openWorldHint should be false", tool.Name)
 		}
 	}
 	// ping and unknown method
