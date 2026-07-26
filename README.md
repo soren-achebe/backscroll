@@ -133,18 +133,22 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 > commands longer than 57 bytes), plus exit codes and OSC 7 cwd, with no
 > snippet installed.
 
-> **Ghostty (or any plain-OSC 133 terminal, e.g. iTerm2)?** Also
+> **Ghostty, iTerm2, or any plain-OSC 133 terminal?** Also
 > zero-config. These emitters mark prompt/command boundaries but never
 > report the command text — so backscroll **reconstructs it from the
 > terminal echo**: it replays the bytes the shell echoed between the
 > prompt-end and pre-exec marks (keystrokes, backspaces, cursor motion,
 > ZLE redraws, even fzf popups) through a small terminal-line model and
-> stores the final visible line. Real command text, outputs, cwd, and
-> (zsh) exit codes with no snippet installed. Ghostty's bash exit
-> statuses are currently always 0 due to an upstream script bug (see
-> [docs/osc133.md](docs/osc133.md), gotcha 15). The snippet is still
-> the gold path — its OSC 6973 text is authoritative and adds the
-> picker binding — and coexists cleanly.
+> stores the final visible line. Real command text, outputs, and exit
+> codes with no snippet installed. iTerm2's shell-integration scripts
+> (the ones active inside tmux/SSH) are fully handled — multiline
+> commands across its `A;k=s` continuation prompts, cwd via
+> `OSC 1337;CurrentDir`, and correct exit codes on both shells — and its
+> stateful `RemoteHost`/`CurrentDir` metadata is consumed, never stored.
+> Ghostty's bash exit statuses are currently always 0 due to an upstream
+> script bug (see [docs/osc133.md](docs/osc133.md), gotcha 15). The
+> snippet is still the gold path — its OSC 6973 text is authoritative
+> and adds the picker binding — and coexists cleanly.
 
 1. Add the integration to your shell rc (inert outside recorded sessions):
 
