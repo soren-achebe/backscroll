@@ -26,6 +26,9 @@ jobs:
           curl -sL https://raw.githubusercontent.com/rcaloras/bash-preexec/master/bash-preexec.sh -o /tmp/bash-preexec.sh
           python3 shell/test_bash_integration.py
           python3 shell/test_zsh_fish_integration.py
+      - name: E2E test of the MCP server (stdio JSON-RPC vs real recorded session)
+        if: runner.os == 'Linux'
+        run: BKS_BIN="$PWD/backscroll" python3 shell/test_mcp.py
       - name: cache fish 4.8.1
         if: runner.os == 'Linux'
         uses: actions/cache@v4
