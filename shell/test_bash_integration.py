@@ -30,11 +30,21 @@ except ImportError:
 SNIP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backscroll.bash")
 BP = "/tmp/bash-preexec.sh"
 
+# Bash binary under test. Point BKS_TEST_BASH at e.g. a locally built
+# bash 3.2.57 (see shell/build-bash32.sh) to exercise the pre-4.0
+# fallback widget guard (tty raw-mode check instead of READLINE_LINE).
+BASH = os.environ.get("BKS_TEST_BASH", "bash")
+import subprocess
+_ver = subprocess.run([BASH, "-c", 'echo "${BASH_VERSINFO[0]}"'],
+                      capture_output=True, text=True).stdout.strip()
+BASH_MAJOR = int(_ver or "0")
+print(f"# bash under test: {BASH} (major version {BASH_MAJOR})")
+
 
 def session(setup_lines, keys_and_lines):
     """Run an interactive bash, return list of decoded OSC events."""
     child = pexpect.spawn(
-        "bash", ["--norc", "--noprofile"], encoding=None, timeout=10,
+        BASH, ["--norc", "--noprofile"], encoding=None, timeout=10,
         env={"PS1": "P$ ", "TERM": "xterm", "PATH": "/usr/bin:/bin",
              "HOME": "/tmp", "BACKSCROLL_ACTIVE": "1"},
     )
@@ -128,7 +138,12 @@ check("widget: C/D balanced for echo commands",
       f"C={ev.count('C')} D={ev.count('D')}")
 
 # --- test 3: bash-preexec coexistence, both orders ----------------------
-if os.path.exists(BP):
+# Skipped on bash < 4: bash-preexec's own DEBUG-trap hook has the same
+# widget hole there (no READLINE_LINE to guard with), which is its bug to
+# fix, not ours — our direct-trap path is what covers 3.x users.
+if BASH_MAJOR < 4:
+    print("SKIP bash-preexec tests (bash < 4 under test)")
+elif os.path.exists(BP):
     for order, setup in [
         ("bp-first", [f"source {BP}", f"source {SNIP}"]),
         ("bks-first", [f"source {SNIP}", f"source {BP}"]),

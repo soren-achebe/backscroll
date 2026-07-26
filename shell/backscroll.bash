@@ -18,6 +18,19 @@ if [[ -n "$BACKSCROLL_ACTIVE" && -z "$BACKSCROLL_HOOKED" ]]; then
     # unsets it afterwards, so its presence identifies widget execution.
     [[ -n "${READLINE_LINE+x}" ]] && return
     [[ -z "$__bks_at_prompt" ]] && return
+    if ((BASH_VERSINFO[0] < 4)); then
+      # READLINE_LINE doesn't exist before bash 4.0 (macOS /bin/bash is
+      # 3.2), so the guard above is inert there. Fall back on a 3.x
+      # quirk: bind -x runs its handler while the tty is still in
+      # readline's raw mode (icanon off), whereas accepted commands run
+      # after readline restores canonical mode. Verified on 3.2.57;
+      # HISTCMD is frozen inside the trap and LINENO advances for widget
+      # bodies too, so neither distinguishes the cases — and comparing
+      # `history 1` misfires under HISTCONTROL=ignoredups.
+      case $(stty -a </dev/tty 2>/dev/null) in
+        *-icanon*) return ;;
+      esac
+    fi
     local cmd
     if [[ -n "${1:-}" ]]; then
       cmd=$1
@@ -73,8 +86,10 @@ fi
 
 # Ctrl-X Ctrl-P: fuzzy-pick a past command (with output preview) and insert
 # it at the prompt. Active in and out of recorded sessions; set
-# BACKSCROLL_NO_BIND=1 before sourcing to skip. Needs fzf.
-if [[ -z "$BACKSCROLL_NO_BIND" ]]; then
+# BACKSCROLL_NO_BIND=1 before sourcing to skip. Needs fzf, and bash >= 4.0
+# (insertion works via READLINE_LINE, which bash 3.x doesn't have; 3.x
+# bind -x also leaves the tty raw, which would garble fzf's UI).
+if [[ -z "$BACKSCROLL_NO_BIND" ]] && ((BASH_VERSINFO[0] >= 4)); then
   __bks_pick_insert() {
     local sel
     sel=$(backscroll pick --print-cmd -- "$READLINE_LINE")

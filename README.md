@@ -162,7 +162,9 @@ it opens the picker over everything you've recorded — whatever you'd
 already typed becomes the initial query — and inserts the selected
 command back at your prompt, like Ctrl-R but you pick by *what the
 command printed*, not just what you typed. Set `BACKSCROLL_NO_BIND=1`
-before the snippet to opt out.
+before the snippet to opt out. (In bash the binding needs bash ≥ 4.0;
+on macOS's stock bash 3.2 it's skipped — recording itself still works
+there.)
 
 ## tmux / screen / SSH
 

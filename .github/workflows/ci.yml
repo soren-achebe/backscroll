@@ -26,3 +26,21 @@ jobs:
           curl -sL https://raw.githubusercontent.com/rcaloras/bash-preexec/master/bash-preexec.sh -o /tmp/bash-preexec.sh
           python3 shell/test_bash_integration.py
           python3 shell/test_zsh_fish_integration.py
+      - name: cache bash 3.2.57
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bash-3.2.57
+          key: bash-3.2.57-${{ runner.os }}
+      - name: PTY tests against bash 3.2.57 (pre-4.0 widget guard)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y -qq bison
+          sh shell/build-bash32.sh "$HOME/.cache/bash-3.2.57"
+          BKS_TEST_BASH="$HOME/.cache/bash-3.2.57/bin/bash" python3 shell/test_bash_integration.py
+      - name: PTY tests against macOS system bash 3.2
+        if: runner.os == 'macOS'
+        run: |
+          python3 -m pip install --quiet --break-system-packages pexpect \
+            || python3 -m pip install --quiet pexpect
+          BKS_TEST_BASH=/bin/bash python3 shell/test_bash_integration.py
