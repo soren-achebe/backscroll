@@ -6,19 +6,44 @@ if [[ -n "$BACKSCROLL_ACTIVE" && -z "$BACKSCROLL_HOOKED" ]]; then
   export BACKSCROLL_HOOKED=1
 
   __bks_preexec() {
-    # Only fire for the first DEBUG trap after a prompt, and not for
+    # $1 = command text when invoked as a bash-preexec preexec function;
+    # empty when invoked directly as a DEBUG trap.
+    # Only fire for the first invocation after a prompt, and not for
     # completion or PROMPT_COMMAND itself.
     [[ -n "$COMP_LINE" ]] && return
+    # Skip bind -x widgets (fzf's Ctrl-R, etc.): bash runs the DEBUG trap
+    # for them too, which would emit a phantom mark labeled with the
+    # previous command AND leave the real next command unmarked. bash sets
+    # READLINE_LINE exactly while a bind -x command runs (bash >= 4.0) and
+    # unsets it afterwards, so its presence identifies widget execution.
+    [[ -n "${READLINE_LINE+x}" ]] && return
     [[ -z "$__bks_at_prompt" ]] && return
-    # ignore our own bind -x widgets (e.g. the Ctrl-X Ctrl-P picker)
-    [[ "$BASH_COMMAND" == __bks_* ]] && return
-    # ignore fragments of PROMPT_COMMAND itself
-    [[ -n "$BASH_COMMAND" && "$PROMPT_COMMAND" == *"$BASH_COMMAND"* ]] && return
+    local cmd
+    if [[ -n "${1:-}" ]]; then
+      cmd=$1
+    elif (( ${#FUNCNAME[@]} > 1 )); then
+      # DEBUG trap fired while inside another function. Two cases:
+      # (a) bash-preexec was sourced *after* us and chained our old trap
+      #     as __bp_original_debug_trap — a real user command; take it
+      #     from history (BASH_COMMAND is bp's internals here).
+      # (b) anything else (e.g. bash-preexec's `declare -ft` installers,
+      #     whose internals fire DEBUG during hook installation) — not a
+      #     user command; skip, or we'd record `local lastexit=$? ...`.
+      [[ "${FUNCNAME[1]}" == "__bp_original_debug_trap" ]] || return
+      cmd=$(HISTTIMEFORMAT= builtin history 1 2>/dev/null | sed 's/^ *[0-9]* *//')
+      [[ -z "$cmd" ]] && return
+    else
+      # ignore our own bind -x widgets (e.g. the Ctrl-X Ctrl-P picker)
+      # and bash-preexec internals (its installer runs from PROMPT_COMMAND)
+      [[ "$BASH_COMMAND" == __bks_* || "$BASH_COMMAND" == __bp_* ]] && return
+      # ignore fragments of PROMPT_COMMAND itself ([*] — it may be an
+      # array on bash >= 5.1, and others may have appended elements)
+      [[ -n "$BASH_COMMAND" && "${PROMPT_COMMAND[*]}" == *"$BASH_COMMAND"* ]] && return
+      cmd=$(HISTTIMEFORMAT= builtin history 1 2>/dev/null | sed 's/^ *[0-9]* *//')
+      [[ -z "$cmd" ]] && cmd="$BASH_COMMAND"
+    fi
     unset __bks_at_prompt
     __bks_ran_command=1
-    local cmd
-    cmd=$(HISTTIMEFORMAT= builtin history 1 2>/dev/null | sed 's/^ *[0-9]* *//')
-    [[ -z "$cmd" ]] && cmd="$BASH_COMMAND"
     printf '\033]6973;cmd=%s\007' "$(printf '%s' "$cmd" | base64 | tr -d '\n')"
     printf '\033]133;C\007'
   }
@@ -34,8 +59,16 @@ if [[ -n "$BACKSCROLL_ACTIVE" && -z "$BACKSCROLL_HOOKED" ]]; then
     __bks_at_prompt=1
   }
 
-  trap '__bks_preexec' DEBUG
-  PROMPT_COMMAND="__bks_precmd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+  if [[ -n "${bash_preexec_imported:-}${__bp_imported:-}" ]]; then
+    # bash-preexec is loaded (atuin, hishtory, etc. use it). Register into
+    # its hook arrays instead of competing for the DEBUG trap — it hands us
+    # the exact command text and guarantees once-per-command semantics.
+    preexec_functions+=(__bks_preexec)
+    precmd_functions+=(__bks_precmd)
+  else
+    trap '__bks_preexec' DEBUG
+    PROMPT_COMMAND="__bks_precmd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+  fi
 fi
 
 # Ctrl-X Ctrl-P: fuzzy-pick a past command (with output preview) and insert
