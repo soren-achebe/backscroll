@@ -94,6 +94,10 @@ Usage:
                                  lets AI coding agents search your history
                                  and read command outputs. Secrets are
                                  redacted by default (--no-redact opts out)
+  backscroll serve               local web UI: browse + search your history
+                                 in the browser, colors preserved, diffs.
+                                 Loopback-only by default (127.0.0.1:4133);
+                                 read-only; --redact masks secrets
   backscroll off | on            pause / resume recording (this session)
   backscroll doctor              check that everything is set up correctly
   backscroll doctor --reindex    rebuild the full-text search index
@@ -143,6 +147,8 @@ func main() {
 		err = cmdSync(args)
 	case "mcp":
 		err = cmdMCP(args)
+	case "serve", "web":
+		err = cmdServe(args)
 	case "off", "on":
 		err = cmdToggle(cmd)
 	case "doctor":

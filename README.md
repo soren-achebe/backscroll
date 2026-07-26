@@ -204,6 +204,7 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 | `backscroll delete <id>` | forget one entry (that `curl -H "Authorization: ..."`) |
 | `backscroll redact <id\|-N>` | permanently mask tokens/keys/passwords in a stored entry (`--dry-run` previews) |
 | `backscroll mcp` | MCP server: let your AI coding agent query your history ([details](#ai-agents-mcp)) |
+| `backscroll serve` | local web UI: browse + search your history in the browser ([details](#web-ui)) |
 | `backscroll off` / `on` | pause / resume recording in this session |
 | `backscroll doctor` | check that everything is wired up |
 
@@ -313,6 +314,32 @@ ignore patterns that already keep matching commands out of the DB entirely.
 server only reads the local DB — recording keeps happening in your shells,
 and nothing leaves the machine except what your agent asks for.
 
+## Web UI
+
+`backscroll serve` starts a **local, read-only web UI** over your recorded
+history:
+
+![web UI](demo/serve.png)
+
+- **Search as you type** across commands *and* their outputs (FTS5 under
+  the hood — instant even with tens of thousands of commands), with
+  match snippets, plus the same filters as the CLI (failures only, time
+  range).
+- **Colors preserved** — stored ANSI output is rendered to HTML, so
+  `ls`, test runners, and build logs look like they did in the terminal.
+  Progress-bar spam (`\r` overwrites) collapses to its final state.
+- **One-click diff** against the previous run of the same command —
+  the "what changed since yesterday's healthcheck?" button.
+- **Local-only by design**: binds to `127.0.0.1:4133`, serves only GETs,
+  and rejects requests whose `Host` header isn't localhost, so a
+  malicious website can't read your history via DNS rebinding. If you
+  override `--addr` to a non-loopback address it warns you, loudly.
+  `--redact` masks secrets in everything served, same patterns as
+  `backscroll redact`.
+
+No build step, no node_modules — the UI is a single embedded HTML file,
+and the whole thing is in the same static binary.
+
 ## vs. other tools
 
 | | records commands | records **outputs** | searchable | per-command structure |
@@ -382,7 +409,7 @@ responsibility. backscroll is local-only by design. Still:
 Early but working: bash, zsh, and fish on Linux and macOS, with
 ignore-patterns, session pause (`off`/`on`), output diffing, the fzf picker
 (`pick`, Ctrl-X Ctrl-P, tmux popups), encrypted cross-machine sync, an MCP
-server for AI agents, and a `doctor` command.
+server for AI agents, a local web UI (`serve`), and a `doctor` command.
 Issues and PRs welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License

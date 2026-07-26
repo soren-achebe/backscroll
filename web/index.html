@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>backscroll</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230d1117'/%3E%3Ctext x='2' y='12' font-family='monospace' font-size='11' fill='%2358a6ff'%3E%E2%9D%AF%3C/text%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #0d1117; --panel: #161b22; --panel2: #1c2129; --border: #2d333b;
+  --fg: #d6dde6; --dim: #8b949e; --accent: #58a6ff; --ok: #3fb950;
+  --bad: #f85149; --mark: #bb8009;
+  --c0:#484f58;--c1:#ff7b72;--c2:#3fb950;--c3:#d29922;--c4:#58a6ff;--c5:#bc8cff;--c6:#39c5cf;--c7:#b1bac4;
+  --c8:#6e7681;--c9:#ffa198;--c10:#56d364;--c11:#e3b341;--c12:#79c0ff;--c13:#d2a8ff;--c14:#56d4dd;--c15:#f0f6fc;
+}
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg);
+  font: 14px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+header { position:sticky; top:0; z-index:10; background:var(--bg);
+  border-bottom:1px solid var(--border); padding:10px 16px;
+  display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+header .logo { font-weight:700; color:var(--fg); white-space:nowrap; }
+header .logo span { color:var(--accent); }
+#q { flex:1; min-width:200px; background:var(--panel); color:var(--fg);
+  border:1px solid var(--border); border-radius:6px; padding:7px 11px;
+  font:inherit; outline:none; }
+#q:focus { border-color:var(--accent); }
+select { background:var(--panel); color:var(--fg); border:1px solid var(--border);
+  border-radius:6px; padding:6px 8px; font:inherit; }
+#stats { color:var(--dim); font-size:12px; white-space:nowrap; }
+#redacting { color:var(--mark); font-size:12px; display:none; }
+main { max-width:1100px; margin:0 auto; padding:12px 16px 60px; }
+.row { border:1px solid var(--border); border-radius:8px; margin:8px 0;
+  background:var(--panel); overflow:hidden; }
+.rowhead { display:flex; gap:12px; align-items:baseline; padding:9px 13px;
+  cursor:pointer; }
+.rowhead:hover { background:var(--panel2); }
+.id { color:var(--dim); min-width:3.5em; text-align:right; }
+.cmd { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.meta { color:var(--dim); font-size:12px; white-space:nowrap; }
+.exit-ok { color:var(--ok); } .exit-bad { color:var(--bad); font-weight:700; }
+.host { color:var(--c5); font-size:12px; }
+.snip { padding:0 13px 9px 4.8em; color:var(--dim); font-size:12px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.snip mark { background:transparent; color:var(--mark); font-weight:700; }
+.body { border-top:1px solid var(--border); display:none; }
+.body.open { display:block; }
+.toolbar { display:flex; gap:8px; padding:8px 13px; align-items:center;
+  border-bottom:1px solid var(--border); background:var(--panel2);
+  font-size:12px; color:var(--dim); flex-wrap:wrap; }
+.toolbar button { background:var(--panel); border:1px solid var(--border);
+  color:var(--fg); border-radius:6px; padding:4px 10px; font:inherit;
+  font-size:12px; cursor:pointer; }
+.toolbar button:hover { border-color:var(--accent); }
+pre { margin:0; padding:12px 14px; overflow-x:auto; max-height:65vh;
+  overflow-y:auto; font:inherit; tab-size:8; }
+.empty { color:var(--dim); text-align:center; padding:40px 0; }
+.trunc { color:var(--mark); font-size:12px; }
+/* ANSI palette + attrs (classes emitted by internal/ansihtml) */
+.f0{color:var(--c0)} .f1{color:var(--c1)} .f2{color:var(--c2)} .f3{color:var(--c3)}
+.f4{color:var(--c4)} .f5{color:var(--c5)} .f6{color:var(--c6)} .f7{color:var(--c7)}
+.f8{color:var(--c8)} .f9{color:var(--c9)} .f10{color:var(--c10)} .f11{color:var(--c11)}
+.f12{color:var(--c12)} .f13{color:var(--c13)} .f14{color:var(--c14)} .f15{color:var(--c15)}
+.b0{background:var(--c0)} .b1{background:var(--c1)} .b2{background:var(--c2)} .b3{background:var(--c3)}
+.b4{background:var(--c4)} .b5{background:var(--c5)} .b6{background:var(--c6)} .b7{background:var(--c7)}
+.b8{background:var(--c8)} .b9{background:var(--c9)} .b10{background:var(--c10)} .b11{background:var(--c11)}
+.b12{background:var(--c12)} .b13{background:var(--c13)} .b14{background:var(--c14)} .b15{background:var(--c15)}
+.bo{font-weight:700} .di{opacity:.6} .it{font-style:italic}
+.ul{text-decoration:underline} .st{text-decoration:line-through}
+.rv{background:var(--fg);color:var(--bg)}
+.dl{color:var(--bad)} .in{color:var(--ok)}
+kbd { background:var(--panel2); border:1px solid var(--border); border-radius:4px;
+  padding:0 5px; font-size:11px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">back<span>scroll</span></div>
+  <input id="q" type="search" placeholder="search output &amp; commands…  ( / )" autocomplete="off">
+  <select id="exit"><option value="">all exits</option><option value="fail">failed</option><option value="0">exit 0</option></select>
+  <select id="since"><option value="">any time</option><option value="1h">last hour</option><option value="1d">last day</option><option value="1w">last week</option></select>
+  <select id="host" style="display:none"><option value="">all hosts</option></select>
+  <span id="redacting">redacting</span>
+  <span id="stats"></span>
+</header>
+<main><div id="list"><div class="empty">loading…</div></div></main>
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const list = $("#list"), q = $("#q");
+let timer = null, ctl = null;
+
+function ago(ms) {
+  if (!ms) return "?";
+  const s = (Date.now() - ms) / 1000;
+  if (s < 90) return Math.max(1, s|0) + "s ago";
+  if (s < 5400) return (s/60|0) + "m ago";
+  if (s < 129600) return (s/3600|0) + "h ago";
+  return (s/86400|0) + "d ago";
+}
+function dur(ms) {
+  if (ms < 0) return "";
+  if (ms < 1000) return ms + "ms";
+  if (ms < 60000) return (ms/1000).toFixed(1) + "s";
+  return (ms/60000|0) + "m" + ((ms%60000)/1000|0) + "s";
+}
+function esc(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function kb(n) { return n < 1024 ? n + " B" : n < 1048576 ? (n/1024).toFixed(1) + " KB" : (n/1048576).toFixed(1) + " MB"; }
+
+async function refresh() {
+  if (ctl) ctl.abort();
+  ctl = new AbortController();
+  const p = new URLSearchParams();
+  if (q.value.trim()) p.set("q", q.value.trim());
+  for (const id of ["exit","since","host"]) { const v = $("#"+id).value; if (v) p.set(id, v); }
+  p.set("n", "100");
+  let d;
+  try { d = await (await fetch("/api/commands?" + p, {signal: ctl.signal})).json(); }
+  catch (e) { if (e.name !== "AbortError") list.innerHTML = '<div class="empty">server gone — restart <b>backscroll serve</b></div>'; return; }
+  const cs = d.commands || [];
+  if (!cs.length) { list.innerHTML = '<div class="empty">nothing here' + (q.value ? " for “" + esc(q.value) + "”" : "") + '</div>'; return; }
+  list.innerHTML = cs.map(c => {
+    const ex = c.exit === null ? '<span class="meta">exit ?</span>'
+      : c.exit === 0 ? '<span class="exit-ok">✓</span>'
+      : '<span class="exit-bad">✗ ' + c.exit + '</span>';
+    return '<div class="row" data-id="' + c.id + '">' +
+      '<div class="rowhead">' +
+        '<span class="id">' + c.id + '</span>' + ex +
+        '<span class="cmd">' + esc(c.cmd) + '</span>' +
+        (c.host ? '<span class="host">[' + esc(c.host) + ']</span>' : '') +
+        '<span class="meta">' + ago(c.started_at) + (dur(c.dur_ms) ? " · " + dur(c.dur_ms) : "") + '</span>' +
+      '</div>' +
+      (c.snippet ? '<div class="snip">' + c.snippet + '</div>' : '') +
+      '<div class="body"></div></div>';
+  }).join("");
+}
+
+async function toggle(row) {
+  const body = row.querySelector(".body");
+  if (body.classList.contains("open")) { body.classList.remove("open"); return; }
+  if (!body.dataset.loaded) {
+    body.innerHTML = '<div class="toolbar">loading…</div>';
+    body.classList.add("open");
+    const d = await (await fetch("/api/cmd/" + row.dataset.id)).json();
+    const m = d.meta;
+    body.innerHTML =
+      '<div class="toolbar">' +
+        '<span>' + esc(m.cwd || "") + '</span>' +
+        '<span>' + kb(m.bytes) + (m.truncated ? ' <span class="trunc">(truncated)</span>' : '') + '</span>' +
+        '<span style="flex:1"></span>' +
+        '<button class="copy">copy command</button>' +
+        '<button class="diff">diff vs previous run</button>' +
+      '</div><pre>' + (d.html || '<span class="di">(no output)</span>') + '</pre>';
+    body.dataset.loaded = "1";
+    body.dataset.cmd = m.cmd;
+    body.querySelector(".copy").onclick = ev => {
+      ev.stopPropagation();
+      navigator.clipboard.writeText(body.dataset.cmd);
+      ev.target.textContent = "copied ✓"; setTimeout(() => ev.target.textContent = "copy command", 1200);
+    };
+    body.querySelector(".diff").onclick = async ev => {
+      ev.stopPropagation();
+      const dd = await (await fetch("/api/diff/" + row.dataset.id)).json();
+      const pre = body.querySelector("pre");
+      if (!dd.prev) { ev.target.textContent = "no previous run"; ev.target.disabled = true; return; }
+      if (body.dataset.diff === "1") {
+        pre.innerHTML = body.dataset.plain; body.dataset.diff = "0";
+        ev.target.textContent = "diff vs previous run"; return;
+      }
+      body.dataset.plain = pre.innerHTML;
+      pre.innerHTML = dd.same
+        ? '<span class="di">output identical to run #' + dd.prev.id + ' (' + ago(dd.prev.started_at) + ')</span>'
+        : dd.html;
+      body.dataset.diff = "1";
+      ev.target.textContent = "show output";
+    };
+  }
+  body.classList.add("open");
+}
+
+list.addEventListener("click", e => {
+  const head = e.target.closest(".rowhead");
+  if (head) toggle(head.closest(".row"));
+});
+q.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(refresh, 150); });
+for (const id of ["exit","since","host"]) $("#"+id).addEventListener("change", refresh);
+document.addEventListener("keydown", e => {
+  if (e.key === "/" && document.activeElement !== q) { e.preventDefault(); q.focus(); q.select(); }
+  if (e.key === "Escape" && document.activeElement === q) q.blur();
+});
+
+(async () => {
+  try {
+    const s = await (await fetch("/api/stats")).json();
+    $("#stats").textContent = s.commands + " commands · " + s.sessions + " sessions · " + kb(s.db_bytes) + " · v" + s.version;
+    if (s.redacting) $("#redacting").style.display = "inline";
+  } catch (e) {}
+  refresh();
+})();
+</script>
+</body>
+</html>

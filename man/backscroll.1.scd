@@ -116,6 +116,14 @@ adds the picker binding and tab completion, and both together are fine.
 	(same patterns as *redact*); *--no-redact* disables that. Register
 	with your client as command *backscroll*, args *mcp*.
 
+*serve* [*--addr* _host:port_] [*--redact*]
+	Serve a local, read-only web UI for browsing and searching history:
+	search-as-you-type over commands and outputs, ANSI colors rendered,
+	one-click diff against the previous run of the same command. Binds
+	to loopback only by default (_127.0.0.1:4133_) and rejects non-local
+	Host headers (DNS-rebinding guard). *--redact* masks secrets in
+	everything served (colors are lost on redacted output).
+
 *off* / *on*
 	Pause / resume recording in the current session (in-band; no IPC).
 

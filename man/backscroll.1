@@ -156,6 +156,16 @@ Secrets are masked by default in everything handed to the client
 with your client as command \fBbackscroll\fR, args \fBmcp\fR.\&
 .P
 .RE
+\fBserve\fR [\fB--addr\fR \fIhost:port\fR] [\fB--redact\fR]
+.RS 4
+Serve a local, read-only web UI for browsing and searching history:
+search-as-you-type over commands and outputs, ANSI colors rendered,
+one-click diff against the previous run of the same command.\& Binds
+to loopback only by default (\fI127.\&0.\&0.\&1:4133\fR) and rejects non-local
+Host headers (DNS-rebinding guard).\& \fB--redact\fR masks secrets in
+everything served (colors are lost on redacted output).\&
+.P
+.RE
 \fBoff\fR / \fBon\fR
 .RS 4
 Pause / resume recording in the current session (in-band; no IPC).\&
