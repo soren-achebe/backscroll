@@ -112,6 +112,12 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 
 ## Set up (30 seconds)
 
+> **fish ≥ 4.0?** Skip step 1 entirely if you like — fish 4 emits
+> OSC 133 marks (with the command line attached) natively, so
+> `backscroll run` records with **zero configuration**. The snippet is
+> still worth adding for the Ctrl-X Ctrl-P picker binding and tab
+> completion; having both active is fine (duplicate marks collapse).
+
 1. Add the integration to your shell rc (inert outside recorded sessions):
 
    ```sh

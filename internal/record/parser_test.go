@@ -10,6 +10,7 @@ import (
 
 type collected struct {
 	cmds  []string
+	hints []string
 	cwds  []string
 	outs  []string
 	exits []int
@@ -21,6 +22,7 @@ func collector() (*Parser, *collected) {
 	c := &collected{}
 	p := NewParser(Events{
 		CmdText: func(s string) { c.cmds = append(c.cmds, s) },
+		CmdHint: func(s string) { c.hints = append(c.hints, s) },
 		Cwd:     func(s string) { c.cwds = append(c.cwds, s) },
 		OutStart: func() {
 			c.buf.Reset()
@@ -227,5 +229,58 @@ func TestIsShellExit(t *testing.T) {
 		if isShellExit(c) {
 			t.Errorf("isShellExit(%q) = true, want false", c)
 		}
+	}
+}
+
+// fish ≥4.0 emits its own OSC 133 marks with the command line attached to
+// the C mark as a percent-encoded cmdline_url parameter (kitty shell
+// integration protocol). We surface it as a CmdHint.
+func TestCmdlineURLHint(t *testing.T) {
+	p, c := collector()
+	p.Feed([]byte(osc("133;C;cmdline_url=echo%20hello%3B%20false") + "out" + osc("133;D;0")))
+	if len(c.hints) != 1 || c.hints[0] != "echo hello; false" {
+		t.Fatalf("hints = %q", c.hints)
+	}
+	if len(c.outs) != 1 || c.outs[0] != "out" {
+		t.Fatalf("outs = %q", c.outs)
+	}
+	// plain C marks and other params produce no hint
+	p.Feed([]byte(osc("133;C") + osc("133;D;0")))
+	p.Feed([]byte(osc("133;C;special_key=1") + osc("133;D;0")))
+	if len(c.hints) != 1 {
+		t.Fatalf("unexpected extra hints: %q", c.hints)
+	}
+	// multiple params: hint found regardless of position
+	p.Feed([]byte(osc("133;C;special_key=1;cmdline_url=ls%20-la") + osc("133;D;0")))
+	if len(c.hints) != 2 || c.hints[1] != "ls -la" {
+		t.Fatalf("hints = %q", c.hints)
+	}
+	// malformed percent escapes pass through undecoded rather than panicking
+	p.Feed([]byte(osc("133;C;cmdline_url=100%zz%2") + osc("133;D;0")))
+	if c.hints[2] != "100%zz%2" {
+		t.Fatalf("malformed = %q", c.hints[2])
+	}
+}
+
+// Double emission: a terminal-native C mark (with cmdline_url) followed by
+// our snippet's 6973;cmd + plain C, then one output span and two D marks —
+// exactly what fish ≥4.0 plus our integration produces. The parser must
+// report one command span, both texts, and ignore the trailing D.
+func TestNativePlusSnippetDoubleEmission(t *testing.T) {
+	p, c := collector()
+	p.Feed([]byte(
+		osc("133;A") + osc("133;B") +
+			osc("133;C;cmdline_url=false") +
+			mark("false") + // 6973;cmd=... + our own 133;C
+			osc("133;D;1") + osc("133;D;1") +
+			osc("133;A")))
+	if len(c.outs) != 1 || len(c.exits) != 1 || c.exits[0] != 1 {
+		t.Fatalf("outs=%q exits=%v", c.outs, c.exits)
+	}
+	if len(c.hints) != 1 || c.hints[0] != "false" || len(c.cmds) != 1 || c.cmds[0] != "false" {
+		t.Fatalf("hints=%q cmds=%q", c.hints, c.cmds)
+	}
+	if c.outs[0] != "" {
+		t.Fatalf("marks leaked into output: %q", c.outs[0])
 	}
 }

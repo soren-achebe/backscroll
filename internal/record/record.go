@@ -179,7 +179,8 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 
 	// per-command state
 	var (
-		curCmd    string
+		curCmd    string // authoritative, from our snippet's OSC 6973;cmd
+		curHint   string // emitter-provided fallback (fish ≥4.0 cmdline_url)
 		curCwd    string
 		buf       *capBuf
 		startedAt time.Time
@@ -187,21 +188,30 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 		paused    bool
 	)
 	ignorePats := LoadIgnore()
+	// cmdName is the best-known text for the in-flight command: our
+	// snippet's OSC 6973 wins; an emitter-provided C-mark hint (fish ≥4.0
+	// native marks) fills in when the snippet isn't installed.
+	cmdName := func() string {
+		if curCmd != "" {
+			return curCmd
+		}
+		return curHint
+	}
 	flush := func(exitCode int, hasExit bool) {
 		if buf == nil {
 			return
 		}
-		if paused || Ignored(ignorePats, curCmd) || isShellExit(curCmd) {
+		name := cmdName()
+		if paused || Ignored(ignorePats, name) || isShellExit(name) {
 			// isShellExit: a plain `exit`/`logout` is session teardown, not
 			// a command anyone wants to recall (fish emits a D mark for it,
 			// unlike bash/zsh, so it would otherwise be stored).
 			buf = nil
-			curCmd = ""
+			curCmd, curHint = "", ""
 			return
 		}
 		raw := buf.Bytes()
 		plain := ansi.Strip(raw)
-		name := curCmd
 		if name == "" {
 			name = "(unknown command)"
 		}
@@ -211,11 +221,12 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 		}
 		recorded++
 		buf = nil
-		curCmd = ""
+		curCmd, curHint = "", ""
 	}
 
 	parser := NewParser(Events{
 		CmdText: func(c string) { curCmd = c },
+		CmdHint: func(c string) { curHint = c },
 		Cwd:     func(p string) { curCwd = p },
 		OutStart: func() {
 			buf = newCapBuf(headCap, tailCap)
@@ -247,7 +258,7 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 	// "command" is the shell's own terminator (`exit` / `logout`), whose
 	// session-ending C mark never gets a matching D and would otherwise be
 	// stored as a useless stub entry.
-	if isShellExit(curCmd) {
+	if isShellExit(cmdName()) {
 		buf = nil
 	}
 	flush(0, false)

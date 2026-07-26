@@ -34,6 +34,10 @@ fish:	echo 'backscroll init fish | source' >> ~/.config/fish/config.fish
 
 Run *backscroll doctor* to verify the setup.
 
+fish ≥ 4.0 emits OSC 133 marks (with the command line attached) natively,
+so *backscroll run* records it with no snippet at all; the snippet still
+adds the picker binding and tab completion, and both together are fine.
+
 # COMMANDS
 
 *run* [*--head-cap* _N_] [*--tail-cap* _N_] [*-l*|*--login*]

@@ -26,6 +26,22 @@ jobs:
           curl -sL https://raw.githubusercontent.com/rcaloras/bash-preexec/master/bash-preexec.sh -o /tmp/bash-preexec.sh
           python3 shell/test_bash_integration.py
           python3 shell/test_zsh_fish_integration.py
+      - name: cache fish 4.8.1
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/fish-4.8.1
+          key: fish-4.8.1-${{ runner.os }}
+      - name: E2E test against fish 4.8 native OSC 133 marks (zero-config)
+        if: runner.os == 'Linux'
+        run: |
+          if [ ! -x "$HOME/.cache/fish-4.8.1/fish" ]; then
+            mkdir -p "$HOME/.cache/fish-4.8.1"
+            curl -sL https://github.com/fish-shell/fish-shell/releases/download/4.8.1/fish-4.8.1-linux-x86_64.tar.xz \
+              | tar -xJ -C "$HOME/.cache/fish-4.8.1"
+          fi
+          BKS_BIN="$PWD/backscroll" BKS_TEST_FISH4="$HOME/.cache/fish-4.8.1/fish" \
+            python3 shell/test_fish4_native.py
       - name: cache bash 3.2.57
         if: runner.os == 'Linux'
         uses: actions/cache@v4

@@ -11,7 +11,8 @@ import (
 // using OSC 133 shell-integration marks (plus a private OSC 6973 mark
 // carrying the command text, and OSC 7 carrying the cwd).
 type Events struct {
-	CmdText  func(cmd string)            // OSC 6973;cmd=<b64>
+	CmdText  func(cmd string)            // OSC 6973;cmd=<b64> — authoritative (our snippet)
+	CmdHint  func(cmd string)            // OSC 133;C;cmdline_url=<pct> — emitter-provided fallback (fish ≥4.0)
 	OutStart func()                      // OSC 133;C  — output begins
 	OutEnd   func(exitCode int, ok bool) // OSC 133;D[;code]
 	Cwd      func(path string)           // OSC 7;file://host/path
@@ -161,6 +162,17 @@ func (p *Parser) handleOSC(payload string, out *[]byte) {
 			if p.ev.OutStart != nil {
 				p.ev.OutStart()
 			}
+			// Some emitters (fish ≥4.0, following the kitty shell-
+			// integration protocol) attach the command line itself as a
+			// percent-encoded C-mark parameter. Surface it as a hint so
+			// sessions without our snippet still get command text.
+			if strings.HasPrefix(rest, "C;") && p.ev.CmdHint != nil {
+				for _, param := range strings.Split(rest[2:], ";") {
+					if enc, found := strings.CutPrefix(param, "cmdline_url="); found {
+						p.ev.CmdHint(percentDecode(enc))
+					}
+				}
+			}
 		case rest == "D" || strings.HasPrefix(rest, "D;"):
 			if p.capturing {
 				p.capturing = false
@@ -208,7 +220,11 @@ func parseOSC7(s string) string {
 	if i := strings.IndexByte(s, '/'); i >= 0 {
 		s = s[i:]
 	}
-	// undo percent-encoding
+	return percentDecode(s)
+}
+
+// percentDecode undoes %XX percent-encoding, leaving malformed escapes as-is.
+func percentDecode(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
 		if s[i] == '%' && i+2 < len(s) {
