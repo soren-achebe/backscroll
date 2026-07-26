@@ -301,7 +301,9 @@ as `io.github.soren-achebe/backscroll`, and each release ships a
 `backscroll-<version>.mcpb` [bundle](https://github.com/anthropics/mcpb)
 (macOS/Linux) for clients that install MCP servers from a file — no
 separate install needed, though you'll still want the full setup above so
-there's recorded history to search.
+there's recorded history to search. A [Dockerfile](Dockerfile) is included
+for containerized MCP setups (mount your database read-only; recording
+itself still wants the native binary wrapped around your real shell).
 
 **Secrets are masked by default**: everything handed to the client passes
 through the same redaction patterns as `backscroll redact` (built-ins for
