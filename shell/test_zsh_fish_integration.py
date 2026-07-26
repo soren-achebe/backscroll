@@ -152,7 +152,10 @@ def zsh_session(source_lines):
             "bindkey '^T' __test_widget\n"
         )
     child = pexpect.spawn(
-        "zsh", ["-i"], encoding=None, timeout=10,
+        # --no-globalrcs: CI runner images ship global rc files that run
+        # compinit, which can stall on an interactive compaudit prompt.
+        # Only our ZDOTDIR/.zshrc should be in play.
+        "zsh", ["--no-globalrcs", "-i"], encoding=None, timeout=10,
         env={"ZDOTDIR": zdot, "HOME": zdot, "TERM": "xterm",
              "PATH": "/usr/bin:/bin", "BACKSCROLL_ACTIVE": "1",
              "BACKSCROLL_NO_BIND": "1"},
