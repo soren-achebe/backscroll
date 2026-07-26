@@ -71,6 +71,17 @@ itself is built? → [docs/how-it-records.md](docs/how-it-records.md)):
 
 ## Install
 
+Quick install (Linux/macOS — downloads the right binary for your platform,
+verifies its sha256, installs to `~/.local/bin`, no sudo):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/soren-achebe/backscroll/main/install.sh | sh
+```
+
+(Read [`install.sh`](install.sh) first if you like — it's short. Pin a version
+with `BACKSCROLL_VERSION=v0.4.0`, change the target with
+`BACKSCROLL_INSTALL_DIR`.)
+
 Homebrew (macOS):
 
 ```sh
