@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write # MCP Registry OIDC auth
 
 jobs:
   goreleaser:
@@ -23,3 +24,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+
+      # ---- MCPB bundle + MCP Registry publish ----
+      - name: Build MCPB bundle
+        id: mcpb
+        run: |
+          set -eu
+          ver=${GITHUB_REF_NAME#v}
+          mkdir -p /tmp/mcpb-bins
+          for t in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64; do
+            os=${t%-*}; arch=${t#*-}
+            cp dist/backscroll_"${os}"_"${arch}"*/backscroll "/tmp/mcpb-bins/backscroll-$t"
+          done
+          sh mcpb/build.sh "$ver" /tmp/mcpb-bins "backscroll-$ver.mcpb"
+          echo "ver=$ver" >> "$GITHUB_OUTPUT"
+          echo "sha=$(sha256sum "backscroll-$ver.mcpb" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload MCPB to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" "backscroll-${{ steps.mcpb.outputs.ver }}.mcpb"
+
+      - name: Publish to MCP Registry
+        run: |
+          set -eu
+          ver=${{ steps.mcpb.outputs.ver }}
+          sha=${{ steps.mcpb.outputs.sha }}
+          sed -e "s/__VERSION__/$ver/g" -e "s/__SHA256__/$sha/g" \
+            mcpb/server.template.json > server.json
+          curl -sL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish

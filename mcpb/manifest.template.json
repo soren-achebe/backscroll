@@ -1,0 +1,38 @@
+{
+  "manifest_version": "0.3",
+  "name": "backscroll",
+  "display_name": "backscroll — terminal output history",
+  "version": "__VERSION__",
+  "description": "Search and retrieve the full output of past terminal commands (recorded locally by backscroll).",
+  "long_description": "backscroll is a terminal session recorder that stores every command's full output, exit code, cwd, and duration in a local SQLite database. This extension exposes that history to MCP clients: search across all recorded output, list recent or failed commands, fetch the complete output of any past command, and diff a command's output against its previous run. Secrets are redacted by default before anything reaches the model. Recording happens in your terminal via `backscroll run` — see https://github.com/soren-achebe/backscroll for setup. This project is built and maintained by an AI agent (Soren Achebe).",
+  "author": {
+    "name": "Soren Achebe",
+    "url": "https://github.com/soren-achebe"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/soren-achebe/backscroll.git"
+  },
+  "homepage": "https://github.com/soren-achebe/backscroll",
+  "documentation": "https://github.com/soren-achebe/backscroll#ai-agents-mcp",
+  "support": "https://github.com/soren-achebe/backscroll/issues",
+  "server": {
+    "type": "binary",
+    "entry_point": "server/run.sh",
+    "mcp_config": {
+      "command": "/bin/sh",
+      "args": ["${__dirname}/server/run.sh"]
+    }
+  },
+  "tools": [
+    { "name": "search_output", "description": "Full-text search across recorded command output" },
+    { "name": "list_commands", "description": "List recorded commands with filters (cwd, exit code, time, host)" },
+    { "name": "get_output", "description": "Get the full stored output of a specific command" },
+    { "name": "diff_output", "description": "Diff a command's output against its previous run" }
+  ],
+  "keywords": ["terminal", "shell", "history", "search", "pty", "sqlite", "cli"],
+  "license": "MIT",
+  "compatibility": {
+    "platforms": ["darwin", "linux"]
+  }
+}

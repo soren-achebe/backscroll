@@ -296,6 +296,13 @@ claude mcp add backscroll -- backscroll mcp
 { "mcpServers": { "backscroll": { "command": "backscroll", "args": ["mcp"] } } }
 ```
 
+It's also listed in the [official MCP Registry](https://registry.modelcontextprotocol.io/?search=backscroll)
+as `io.github.soren-achebe/backscroll`, and each release ships a
+`backscroll-<version>.mcpb` [bundle](https://github.com/anthropics/mcpb)
+(macOS/Linux) for clients that install MCP servers from a file — no
+separate install needed, though you'll still want the full setup above so
+there's recorded history to search.
+
 **Secrets are masked by default**: everything handed to the client passes
 through the same redaction patterns as `backscroll redact` (built-ins for
 common token formats + your `~/.config/backscroll/redact`), on top of the

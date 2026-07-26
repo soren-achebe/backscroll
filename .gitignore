@@ -3,3 +3,7 @@ backscroll
 *.db-shm
 *.db-wal
 dist/
+
+# generated at release time (mcpb/server.template.json is the source)
+/server.json
+*.mcpb

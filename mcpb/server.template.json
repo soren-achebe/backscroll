@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.soren-achebe/backscroll",
+  "title": "backscroll",
+  "description": "Search, retrieve, and diff the full output of past terminal commands recorded locally by backscroll.",
+  "version": "__VERSION__",
+  "repository": {
+    "url": "https://github.com/soren-achebe/backscroll",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/soren-achebe/backscroll",
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/soren-achebe/backscroll/releases/download/v__VERSION__/backscroll-__VERSION__.mcpb",
+      "fileSha256": "__SHA256__",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
