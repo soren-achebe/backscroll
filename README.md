@@ -45,7 +45,8 @@ through untouched — no UI, no prompt changes, no latency you can notice.
 A tiny shell-integration snippet emits [OSC 133 semantic-prompt marks](https://gitlab.freedesktop.org/Per_Bothner/specifications/blob/master/proposals/semantic-prompts.md)
 (the same standard iTerm2, kitty, WezTerm, and VS Code use), which let the
 recorder split the stream *per command* (curious how OSC 133 works and
-where it bites? → [docs/osc133.md](docs/osc133.md)):
+where it bites? → [docs/osc133.md](docs/osc133.md); how the recorder
+itself is built? → [docs/how-it-records.md](docs/how-it-records.md)):
 
 ```
 ┌ your terminal ─────────────────────────────┐
