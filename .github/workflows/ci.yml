@@ -18,3 +18,9 @@ jobs:
       - run: go vet ./...
       - run: go test ./...
       - run: go build .
+      - name: bash integration PTY tests
+        if: runner.os == 'Linux'
+        run: |
+          pip install --quiet pexpect
+          curl -sL https://raw.githubusercontent.com/rcaloras/bash-preexec/master/bash-preexec.sh -o /tmp/bash-preexec.sh
+          python3 shell/test_bash_integration.py
