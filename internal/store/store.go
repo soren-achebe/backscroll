@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,8 +10,56 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zstd"
-	_ "modernc.org/sqlite"
+
+	"github.com/soren-achebe/backscroll/internal/ansi"
+	sqlite "modernc.org/sqlite"
 )
+
+// bks_z / bks_unz are zstd compress/decompress SQL functions. The FTS
+// index is an external-content fts5 table whose content is the
+// commands_plain VIEW, which decompresses commands.plain_z on demand via
+// bks_unz — so the ANSI-stripped plain text is stored exactly once
+// (compressed) instead of living uncompressed inside the FTS content
+// table. bks_z exists for the one-time migration and for debugging.
+//
+// NOTE: this means the commands_plain view (and therefore FTS queries)
+// only work from binaries that register these functions — i.e.
+// backscroll >= 0.4.0. Plain sqlite3 CLI access to the commands table
+// itself (cmd, cwd, timing, raw output blob) is unaffected.
+var (
+	sqlEnc, _ = zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedDefault))
+	sqlDec, _ = zstd.NewReader(nil)
+)
+
+func init() {
+	sqlite.MustRegisterDeterministicScalarFunction("bks_unz", 1,
+		func(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+			b, ok := args[0].([]byte)
+			if !ok || len(b) == 0 {
+				return "", nil
+			}
+			out, err := sqlDec.DecodeAll(b, nil)
+			if err != nil {
+				return nil, fmt.Errorf("bks_unz: %w", err)
+			}
+			return string(out), nil
+		})
+	sqlite.MustRegisterDeterministicScalarFunction("bks_z", 1,
+		func(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+			var in []byte
+			switch v := args[0].(type) {
+			case string:
+				in = []byte(v)
+			case []byte:
+				in = v
+			case nil:
+				in = nil
+			default:
+				return nil, fmt.Errorf("bks_z: unsupported type %T", v)
+			}
+			return sqlEnc.EncodeAll(in, nil), nil
+		})
+}
 
 const schema = `
 PRAGMA journal_mode=WAL;
@@ -66,6 +115,29 @@ var migrations = [][]string{
 		   v INTEGER NOT NULL
 		 )`,
 	},
+	// v3: stop storing plain text uncompressed inside FTS. The old
+	// commands_fts was a normal (content-storing) fts5 table, so every
+	// command's ANSI-stripped output lived in the DB twice: zstd'd in
+	// commands.output and uncompressed in commands_fts_content — the
+	// latter dominated DB size (measured: 67 of 151 MB on a 5k-command
+	// soak DB). Now plain text is zstd'd into commands.plain_z and
+	// commands_fts is an external-content table over the commands_plain
+	// view, which decompresses on demand (bks_unz). snippet()/highlight()
+	// keep working — fts5 pulls text through the view when it needs it.
+	// All index writes must go through the fts5 special commands from
+	// here on (see AddCommand/Delete/Prune/UpdateOutput).
+	{
+		`ALTER TABLE commands ADD COLUMN plain_z BLOB`,
+		`UPDATE commands SET plain_z = bks_z(coalesce(
+		   (SELECT f.output FROM commands_fts f WHERE f.rowid = commands.id), ''))`,
+		`DROP TABLE commands_fts`,
+		`CREATE VIEW commands_plain(id, cmd, output) AS
+		   SELECT id, cmd, bks_unz(plain_z) FROM commands`,
+		`CREATE VIRTUAL TABLE commands_fts USING fts5(
+		   cmd, output, content='commands_plain', content_rowid='id',
+		   tokenize='trigram')`,
+		`INSERT INTO commands_fts(commands_fts) VALUES('rebuild')`,
+	},
 }
 
 func migrate(db *sql.DB) error {
@@ -73,6 +145,7 @@ func migrate(db *sql.DB) error {
 	if err := db.QueryRow(`PRAGMA user_version`).Scan(&v); err != nil {
 		return err
 	}
+	startV := v
 	for ; v < len(migrations); v++ {
 		tx, err := db.Begin()
 		if err != nil {
@@ -91,6 +164,13 @@ func migrate(db *sql.DB) error {
 		}
 		if err := tx.Commit(); err != nil {
 			return err
+		}
+	}
+	// v3 dropped the (large) old FTS content table; reclaim the space
+	// once, outside any transaction.
+	if startV < 3 && v >= 3 {
+		if _, err := db.Exec(`VACUUM`); err != nil {
+			return fmt.Errorf("post-migration vacuum: %w", err)
 		}
 	}
 	return nil
@@ -181,18 +261,18 @@ func (s *Store) AddCommand(sessionID int64, cmd, cwd string, exitCode int, hasEx
 	if hasExit {
 		ec = exitCode
 	}
+	if len(plainText) > ftsCap {
+		plainText = plainText[:ftsCap]
+	}
 	res, err := s.db.Exec(
-		`INSERT INTO commands(session_id, cmd, cwd, exit_code, started_at, ended_at, output, output_bytes, truncated)
-		 VALUES(?,?,?,?,?,?,?,?,?)`,
+		`INSERT INTO commands(session_id, cmd, cwd, exit_code, started_at, ended_at, output, output_bytes, truncated, plain_z)
+		 VALUES(?,?,?,?,?,?,?,?,?,?)`,
 		sessionID, cmd, cwd, ec, startedAt.UnixMilli(), endedAt.UnixMilli(),
-		blob, len(rawOutput), boolInt(truncated))
+		blob, len(rawOutput), boolInt(truncated), s.enc.EncodeAll([]byte(plainText), nil))
 	if err != nil {
 		return err
 	}
 	id, _ := res.LastInsertId()
-	if len(plainText) > ftsCap {
-		plainText = plainText[:ftsCap]
-	}
 	_, err = s.db.Exec(`INSERT INTO commands_fts(rowid, cmd, output) VALUES(?,?,?)`,
 		id, cmd, plainText)
 	return err
@@ -211,12 +291,16 @@ func (s *Store) AddImported(machine, host string, seq int64, cmd, cwd string,
 	if hasExit {
 		ec = exitCode
 	}
+	fts := plainText
+	if len(fts) > ftsCap {
+		fts = fts[:ftsCap]
+	}
 	res, err := s.db.Exec(
 		`INSERT OR IGNORE INTO commands(session_id, cmd, cwd, exit_code, started_at, ended_at,
-		   output, output_bytes, truncated, machine, host, origin_seq)
-		 VALUES(0,?,?,?,?,?,?,?,0,?,?,?)`,
+		   output, output_bytes, truncated, machine, host, origin_seq, plain_z)
+		 VALUES(0,?,?,?,?,?,?,?,0,?,?,?,?)`,
 		cmd, cwd, ec, startedAt.UnixMilli(), endedAt.UnixMilli(),
-		blob, len(plainText), machine, host, seq)
+		blob, len(plainText), machine, host, seq, s.enc.EncodeAll([]byte(fts), nil))
 	if err != nil {
 		return false, err
 	}
@@ -224,11 +308,8 @@ func (s *Store) AddImported(machine, host string, seq int64, cmd, cwd string,
 		return false, nil // already imported
 	}
 	id, _ := res.LastInsertId()
-	if len(plainText) > ftsCap {
-		plainText = plainText[:ftsCap]
-	}
 	_, err = s.db.Exec(`INSERT INTO commands_fts(rowid, cmd, output) VALUES(?,?,?)`,
-		id, cmd, plainText)
+		id, cmd, fts)
 	return true, err
 }
 
@@ -263,8 +344,8 @@ type ExportEntry struct {
 func (s *Store) LocalAfter(afterID int64, limit int) ([]ExportEntry, error) {
 	rows, err := s.db.Query(`
 		SELECT c.id, c.cmd, coalesce(c.cwd,''), c.exit_code, c.started_at, c.ended_at,
-		       coalesce(f.output,'')
-		FROM commands c LEFT JOIN commands_fts f ON f.rowid = c.id
+		       bks_unz(c.plain_z)
+		FROM commands c
 		WHERE c.machine IS NULL AND c.id > ?
 		ORDER BY c.id LIMIT ?`, afterID, limit)
 	if err != nil {
@@ -578,7 +659,12 @@ func (s *Store) Stats() (Stats, error) {
 // Prune deletes commands older than the given duration.
 func (s *Store) Prune(olderThan time.Duration) (int64, error) {
 	cutoff := time.Now().Add(-olderThan).UnixMilli()
-	if _, err := s.db.Exec(`DELETE FROM commands_fts WHERE rowid IN (SELECT id FROM commands WHERE started_at < ?)`, cutoff); err != nil {
+	// External-content fts5: index rows are removed with the 'delete'
+	// special command, which must be given the originally indexed text.
+	if _, err := s.db.Exec(`
+		INSERT INTO commands_fts(commands_fts, rowid, cmd, output)
+		SELECT 'delete', id, cmd, bks_unz(plain_z) FROM commands WHERE started_at < ?`,
+		cutoff); err != nil {
 		return 0, err
 	}
 	res, err := s.db.Exec(`DELETE FROM commands WHERE started_at < ?`, cutoff)
@@ -586,6 +672,11 @@ func (s *Store) Prune(olderThan time.Duration) (int64, error) {
 		return 0, err
 	}
 	n, _ := res.RowsAffected()
+	// fts5 'delete' only marks rows; merge the segments so the index
+	// actually sheds the deleted data, then let VACUUM return the pages.
+	if _, err := s.db.Exec(`INSERT INTO commands_fts(commands_fts) VALUES('optimize')`); err != nil {
+		return n, err
+	}
 	if _, err := s.db.Exec(`VACUUM`); err != nil {
 		return n, err
 	}
@@ -594,10 +685,19 @@ func (s *Store) Prune(olderThan time.Duration) (int64, error) {
 
 // Delete removes a single command by id.
 func (s *Store) Delete(id int64) error {
-	if _, err := s.db.Exec(`DELETE FROM commands_fts WHERE rowid=?`, id); err != nil {
+	if err := s.ftsDelete(id); err != nil {
 		return err
 	}
 	_, err := s.db.Exec(`DELETE FROM commands WHERE id=?`, id)
+	return err
+}
+
+// ftsDelete removes id's row from the external-content FTS index (must
+// run while the commands row still holds the indexed text).
+func (s *Store) ftsDelete(id int64) error {
+	_, err := s.db.Exec(`
+		INSERT INTO commands_fts(commands_fts, rowid, cmd, output)
+		SELECT 'delete', id, cmd, bks_unz(plain_z) FROM commands WHERE id=?`, id)
 	return err
 }
 
@@ -605,20 +705,72 @@ func (s *Store) Delete(id int64) error {
 // FTS text in place — used by `backscroll redact` to scrub secrets that
 // were already recorded.
 func (s *Store) UpdateOutput(id int64, cmd string, rawOutput []byte, plainText string) error {
-	blob := s.enc.EncodeAll(rawOutput, nil)
-	if _, err := s.db.Exec(
-		`UPDATE commands SET cmd=?, output=?, output_bytes=? WHERE id=?`,
-		cmd, blob, len(rawOutput), id); err != nil {
+	// Drop the old index entry first — the 'delete' special command needs
+	// the text as originally indexed, i.e. before the row is updated.
+	if err := s.ftsDelete(id); err != nil {
 		return err
 	}
 	if len(plainText) > ftsCap {
 		plainText = plainText[:ftsCap]
 	}
-	if _, err := s.db.Exec(`DELETE FROM commands_fts WHERE rowid=?`, id); err != nil {
+	blob := s.enc.EncodeAll(rawOutput, nil)
+	if _, err := s.db.Exec(
+		`UPDATE commands SET cmd=?, output=?, output_bytes=?, plain_z=? WHERE id=?`,
+		cmd, blob, len(rawOutput), s.enc.EncodeAll([]byte(plainText), nil), id); err != nil {
 		return err
 	}
 	_, err := s.db.Exec(`INSERT INTO commands_fts(rowid, cmd, output) VALUES(?,?,?)`,
 		id, cmd, plainText)
+	return err
+}
+
+// RebuildFTS discards and rebuilds the whole FTS index from the
+// commands_plain view. Safety valve for index drift (e.g. a crash
+// between a commands write and its index write, or a pre-0.4 binary
+// having written rows without plain_z). Exposed as `doctor --reindex`.
+func (s *Store) RebuildFTS() error {
+	// Rows written by a pre-0.4 binary have NULL plain_z; regenerate it
+	// from the stored raw output so their output stays searchable.
+	rows, err := s.db.Query(`SELECT id, output FROM commands WHERE plain_z IS NULL`)
+	if err != nil {
+		return err
+	}
+	type fix struct {
+		id    int64
+		plain string
+	}
+	var fixes []fix
+	for rows.Next() {
+		var id int64
+		var blob []byte
+		if err := rows.Scan(&id, &blob); err != nil {
+			rows.Close()
+			return err
+		}
+		var plain string
+		if len(blob) > 0 {
+			raw, err := s.dec.DecodeAll(blob, nil)
+			if err == nil {
+				p := ansi.Strip(raw)
+				if len(p) > ftsCap {
+					p = p[:ftsCap]
+				}
+				plain = string(p)
+			}
+		}
+		fixes = append(fixes, fix{id, plain})
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, f := range fixes {
+		if _, err := s.db.Exec(`UPDATE commands SET plain_z=? WHERE id=?`,
+			s.enc.EncodeAll([]byte(f.plain), nil), f.id); err != nil {
+			return err
+		}
+	}
+	_, err = s.db.Exec(`INSERT INTO commands_fts(commands_fts) VALUES('rebuild')`)
 	return err
 }
 

@@ -258,3 +258,40 @@ func TestListFilters(t *testing.T) {
 		t.Fatalf("search+filter: got %v", ids(res))
 	}
 }
+
+// TestRebuildFTSBackfill simulates a row written by a pre-0.4 binary
+// (plain_z NULL, absent from the index) and checks that RebuildFTS
+// regenerates plain_z from the raw output and makes it searchable again.
+func TestRebuildFTSBackfill(t *testing.T) {
+	st := testStore(t)
+	sess, _ := st.NewSession("bash", "xterm")
+	now := time.Now()
+	add(t, st, sess, "echo ok", "regular row\n", 0, now)
+
+	// Old-binary row: commands insert without plain_z, no fts entry.
+	raw := st.enc.EncodeAll([]byte("legacy \x1b[31mneedle-xyz\x1b[0m output\n"), nil)
+	if _, err := st.db.Exec(`
+		INSERT INTO commands(session_id, cmd, cwd, exit_code, started_at, ended_at, output, output_bytes, truncated)
+		VALUES(?,?,?,?,?,?,?,?,0)`,
+		sess, "legacy-cmd", "/tmp", 0, now.UnixMilli(), now.UnixMilli(), raw, 30); err != nil {
+		t.Fatalf("legacy insert: %v", err)
+	}
+
+	if got, _ := st.Search(`"needle-xyz"`, Filter{}); len(got) != 0 {
+		t.Fatalf("expected no hits before rebuild, got %d", len(got))
+	}
+	if err := st.RebuildFTS(); err != nil {
+		t.Fatalf("RebuildFTS: %v", err)
+	}
+	got, err := st.Search(`"needle-xyz"`, Filter{})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("after rebuild: hits=%d err=%v", len(got), err)
+	}
+	if got[0].Cmd != "legacy-cmd" {
+		t.Fatalf("wrong row: %+v", got[0])
+	}
+	// ANSI must have been stripped during backfill.
+	if got, _ := st.Search(`"regular row"`, Filter{}); len(got) != 1 {
+		t.Fatalf("pre-existing row lost by rebuild")
+	}
+}

@@ -53,6 +53,8 @@ if (( $+functions[compdef] )); then
       compadd md cast json
     elif [[ $words[2] == sync && CURRENT == 3 ]]; then
       compadd init export import status
+    elif [[ $words[2] == doctor ]]; then
+      compadd -- --reindex
     elif [[ $words[2] == (list|last|search|pick) ]]; then
       if [[ $words[CURRENT-1] == (--exit|-exit) ]]; then
         compadd fail 0 1 2

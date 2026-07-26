@@ -115,6 +115,8 @@ _backscroll_complete() {
     COMPREPLY=($(compgen -W "md cast json" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "sync" ] && [ "$COMP_CWORD" -eq 2 ]; then
     COMPREPLY=($(compgen -W "init export import status" -- "$cur"))
+  elif [ "${COMP_WORDS[1]}" = "doctor" ]; then
+    COMPREPLY=($(compgen -W "--reindex" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "list" ] || [ "${COMP_WORDS[1]}" = "last" ] || [ "${COMP_WORDS[1]}" = "search" ] || [ "${COMP_WORDS[1]}" = "pick" ]; then
     case "$prev" in
       --exit|-exit) COMPREPLY=($(compgen -W "fail 0 1 2" -- "$cur")) ;;

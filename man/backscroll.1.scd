@@ -111,6 +111,11 @@ Run *backscroll doctor* to verify the setup.
 	Check that shell integration, database, and environment are set up
 	correctly.
 
+*doctor --reindex*
+	Rebuild the full-text search index from the stored outputs. Use if
+	search results ever look incomplete (e.g. after a crash mid-write or
+	after older backscroll versions wrote to the same database).
+
 # FILTERS
 
 *list*, *search*, and *pick* accept:

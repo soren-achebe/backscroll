@@ -92,6 +92,7 @@ Usage:
                                  (backscroll sync --help for details)
   backscroll off | on            pause / resume recording (this session)
   backscroll doctor              check that everything is set up correctly
+  backscroll doctor --reindex    rebuild the full-text search index
   backscroll version             print version
 
 Ignore patterns: one Go regexp per line in ~/.config/backscroll/ignore —
@@ -139,7 +140,7 @@ func main() {
 	case "off", "on":
 		err = cmdToggle(cmd)
 	case "doctor":
-		err = cmdDoctor()
+		err = cmdDoctor(args)
 	case "version", "--version", "-v":
 		fmt.Println("backscroll", resolvedVersion())
 	case "help", "--help", "-h":
@@ -640,7 +641,20 @@ func rcFor(shell string) (rc string, hook string) {
 	}
 }
 
-func cmdDoctor() error {
+func cmdDoctor(args []string) error {
+	if len(args) == 1 && args[0] == "--reindex" {
+		st, err := openStore()
+		if err != nil {
+			return err
+		}
+		defer st.Close()
+		fmt.Println("rebuilding full-text index from stored outputs…")
+		if err := st.RebuildFTS(); err != nil {
+			return err
+		}
+		fmt.Println("done.")
+		return nil
+	}
 	ok := func(b bool) string {
 		if b {
 			return "\x1b[32m✓\x1b[0m"

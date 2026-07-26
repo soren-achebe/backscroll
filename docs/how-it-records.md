@@ -119,6 +119,28 @@ time, session id, and **two versions of the output**:
   feeds an FTS5 index (trigram tokenizer, so substring search works
   without word-boundary guessing).
 
+The FTS index is worth a detour, because the naive setup doubles your
+database. A normal fts5 table *stores its own uncompressed copy* of
+everything you index — on a 5,000-command soak DB that content shadow
+was 67 MB of a 151 MB file, dwarfing the 1 MB of actual zstd'd data
+sitting next to it. backscroll instead declares `commands_fts` as an
+[external-content](https://sqlite.org/fts5.html#external_content_tables)
+table whose "content" is a **view** that decompresses `plain_z` on
+demand through a registered scalar function (`bks_unz`). fts5 doesn't
+care that the content table isn't a table; it just runs `SELECT` against
+it when `snippet()`/`highlight()` need text. Same features, plain text
+stored exactly once, compressed — the same soak DB drops to 72 MB.
+
+Two costs, for honesty: external-content index writes must go through
+fts5's special `'delete'` command *with the originally-indexed text*
+(get that wrong and the index silently drifts — `backscroll doctor
+--reindex` rebuilds it from scratch if you ever suspect it), and a
+plain `sqlite3` CLI can't query the view since it lacks `bks_unz` —
+though the `commands` table itself stays ordinary and inspectable.
+Also learned the hard way: fts5 `'delete'` only *marks* rows, so
+`prune` follows up with `'optimize'` before `VACUUM`, or a
+fully-pruned index keeps its full size on disk.
+
 Stripping ANSI *before* indexing matters more than it sounds: escape
 sequences routinely land in the middle of words (`conn` + SGR reset +
 `ection`), so an index over raw bytes silently fails to match the exact

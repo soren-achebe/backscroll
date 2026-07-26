@@ -51,6 +51,7 @@ complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -l
 complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -l since -d "only newer than (2h, 3d, 1w, date)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -l host -d "only this synced host (local = this machine)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from sync" -a "init export import status"
+complete -c backscroll -n "__fish_seen_subcommand_from doctor" -l reindex -d "rebuild the full-text search index"
 complete -c backscroll -n "__fish_seen_subcommand_from pick" -l pager -d "view output in a pager"
 complete -c backscroll -n "__fish_seen_subcommand_from pick" -l print-id -d "print only the selected id"
 complete -c backscroll -n "__fish_seen_subcommand_from pick" -l print-cmd -d "print only the command line"

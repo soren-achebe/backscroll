@@ -5,7 +5,7 @@
 .nh
 .ad l
 .\" Begin generated content:
-.TH "backscroll" "1" "2026-07-25"
+.TH "backscroll" "1" "2026-07-26"
 .P
 .SH NAME
 .P
@@ -151,6 +151,13 @@ Pause / resume recording in the current session (in-band; no IPC).\&
 .RS 4
 Check that shell integration, database, and environment are set up
 correctly.\&
+.P
+.RE
+\fBdoctor --reindex\fR
+.RS 4
+Rebuild the full-text search index from the stored outputs.\& Use if
+search results ever look incomplete (e.\&g.\& after a crash mid-write or
+after older backscroll versions wrote to the same database).\&
 .P
 .RE
 .SH FILTERS
