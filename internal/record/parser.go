@@ -300,8 +300,18 @@ func (p *Parser) handleOSC(payload string, out *[]byte) {
 		case rest == "D" || strings.HasPrefix(rest, "D;"):
 			p.markD(rest)
 		case rest == "A" || strings.HasPrefix(rest, "A;"):
-			// new prompt cycle: any un-executed input echo is stale
-			p.echoPromptStart()
+			// iTerm2 wraps PS2 continuation prompts in 133;A;k=s
+			// (Semantic Prompt "secondary", where kitty uses P;k=s):
+			// the B mark that follows *continues* the current input
+			// region across the continuation line. A plain A is a new
+			// prompt cycle: any un-executed input echo is stale.
+			if strings.HasPrefix(rest, "A;") &&
+				strings.Contains(";"+rest[2:]+";", ";k=s;") && p.echoInput {
+				p.echoPhase = cellPrompt
+				p.echoAdd(echoSentPrompt)
+			} else {
+				p.echoPromptStart()
+			}
 		case rest == "B" || strings.HasPrefix(rest, "B;"):
 			p.markB()
 		case strings.HasPrefix(rest, "P;"):
@@ -355,6 +365,20 @@ func (p *Parser) handleOSC(payload string, out *[]byte) {
 		}
 		// A/B/F/G/P;*/Env* etc.: prompt boundaries and terminal metadata;
 		// nothing to capture.
+	case strings.HasPrefix(payload, "1337;CurrentDir="):
+		// iTerm2's shell integration reports the working directory as a
+		// raw path (not an OSC 7 file:// URL) after every command.
+		// Consumed, not stored: replaying it from `show --raw` would
+		// clobber the live terminal's cwd state.
+		if p.ev.Cwd != nil {
+			p.ev.Cwd(payload[len("1337;CurrentDir="):])
+		}
+	case strings.HasPrefix(payload, "1337;RemoteHost="),
+		strings.HasPrefix(payload, "1337;ShellIntegrationVersion="):
+		// iTerm2 integration metadata directed at the host terminal;
+		// stateful (RemoteHost drives iTerm2's ssh/profile switching),
+		// so keep it out of stored output for the same replay reason.
+		// All other 1337 (File= inline images, ...) passes through.
 	case strings.HasPrefix(payload, "1337;SetUserVar=WEZTERM_PROG="):
 		// WezTerm's shell integration reports the command line at preexec
 		// as a base64 user var (after its plain `133;C;` mark). It's the

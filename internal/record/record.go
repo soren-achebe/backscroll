@@ -224,19 +224,25 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 		}
 		raw := buf.Bytes()
 		plain := ansi.Strip(raw)
-		if name == "" && !hasExit {
-			// No command text and no exit code: only worth keeping if
-			// there is real (non-metadata) output.
+		if name == "" && (!hasExit || exitCode == 0) {
+			// No command text and no exit code (or a success exit):
+			// only worth keeping if there is real (non-metadata) output.
 			if len(plain) == 0 {
 				// Phantom prompt cycle. VS Code's bash integration emits
 				// E;; + C + bare D when Ctrl-C is pressed at an empty
 				// prompt (the PROMPT_COMMAND re-fire quirk); Ghostty's
 				// zsh integration opens a C for `exit` whose only bytes
-				// are an OSC 2 title + cursor-shape escape. Nothing real
+				// are an OSC 2 title + cursor-shape escape; iTerm2's
+				// bash integration fires a stray preexec C while the rc
+				// file is still being sourced (pre-first-prompt, so no
+				// A/B and no typed input), which the first prompt's
+				// D;0 closes into an empty exit-0 stub. Nothing real
 				// ran, so store nothing. Compared ANSI-stripped: pure
 				// escape-sequence traffic is terminal metadata, not
 				// output. A real command always leaves text, an exit
-				// code, or command text.
+				// code, or command text. (A *failing* exit code is kept
+				// even without text or output — `list --exit fail` should
+				// surface it.)
 				buf = nil
 				curCmd, curHint, curEcho = "", "", ""
 				return
