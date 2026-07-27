@@ -79,7 +79,7 @@ curl -fsSL https://raw.githubusercontent.com/soren-achebe/backscroll/main/instal
 ```
 
 (Read [`install.sh`](install.sh) first if you like — it's short. Pin a version
-with `BACKSCROLL_VERSION=v0.4.0`, change the target with
+with `BACKSCROLL_VERSION=v0.9.2`, change the target with
 `BACKSCROLL_INSTALL_DIR`.)
 
 Homebrew (macOS):
@@ -119,66 +119,6 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 
 ## Set up (30 seconds)
 
-> **fish ≥ 4.0?** Skip step 1 entirely if you like — fish 4 emits
-> OSC 133 marks (with the command line attached) natively, so
-> `backscroll run` records with **zero configuration**. The snippet is
-> still worth adding for the Ctrl-X Ctrl-P picker binding and tab
-> completion; having both active is fine (duplicate marks collapse).
-
-> **nushell?** Fully zero-config — nu ships with shell integration on by
-> default (OSC 133 marks, real exit codes, OSC 7 cwd), so `backscroll
-> run` records nu sessions with nothing to install. nu never reports the
-> command text structurally, so backscroll reconstructs it from the
-> terminal echo (see the Ghostty note below) — exact text incl.
-> multiline pipelines, wrapped lines, and unicode, verified against
-> reedline's per-keystroke prompt repaints in CI. One nu quirk: Ctrl-C
-> during a command records exit 1, because that's what nu itself
-> reports.
-
-> **VS Code shell integration in your rc file?** Also zero-config: if
-> your shell sources VS Code's `shellIntegration-*.sh` (the
-> [manual install](https://code.visualstudio.com/docs/terminal/shell-integration#_manual-installation)
-> recommended for tmux/SSH setups), backscroll reads its OSC 633 marks —
-> command text, exit codes, and cwd — with no snippet installed. The 633
-> metadata is consumed, never stored into recorded output.
-
-> **kitty or WezTerm shell integration in your rc file?** Same story:
-> kitty's `kitty.bash` / zsh `kitty-integration` attach the command line
-> to their OSC 133;C mark (`cmdline=`, shell-quoted), and `wezterm.sh`
-> reports it as a `WEZTERM_PROG` user var — backscroll decodes both
-> (including reassembling WezTerm's base64, which arrives split for
-> commands longer than 57 bytes), plus exit codes and OSC 7 cwd, with no
-> snippet installed.
-
-> **Windows?** `backscroll run` records PowerShell through a
-> [ConPTY](https://learn.microsoft.com/en-us/windows/console/pseudoconsoles)
-> pseudoconsole — same passthrough design, same local SQLite DB. Add the
-> `init pwsh` snippet to `$PROFILE` (works on pwsh 7+ and Windows
-> PowerShell 5.1) for exact command text, exit codes, and cwd; a shell
-> already carrying VS Code's shell integration is zero-config via its
-> OSC 633 marks. (`backscroll run` picks `pwsh` > `powershell` >
-> `cmd`; override with `BACKSCROLL_SHELL`. cmd.exe has no mark-emitting
-> integration, so sessions run fine but nothing gets segmented —
-> [Clink](https://chrisant996.github.io/clink/) users can emit OSC 133
-> from their prompt filter.)
-
-> **Ghostty, iTerm2, or any plain-OSC 133 terminal?** Also
-> zero-config. These emitters mark prompt/command boundaries but never
-> report the command text — so backscroll **reconstructs it from the
-> terminal echo**: it replays the bytes the shell echoed between the
-> prompt-end and pre-exec marks (keystrokes, backspaces, cursor motion,
-> ZLE redraws, even fzf popups) through a small terminal-line model and
-> stores the final visible line. Real command text, outputs, and exit
-> codes with no snippet installed. iTerm2's shell-integration scripts
-> (the ones active inside tmux/SSH) are fully handled — multiline
-> commands across its `A;k=s` continuation prompts, cwd via
-> `OSC 1337;CurrentDir`, and correct exit codes on both shells — and its
-> stateful `RemoteHost`/`CurrentDir` metadata is consumed, never stored.
-> Ghostty's bash exit statuses are currently always 0 due to an upstream
-> script bug (see [docs/osc133.md](docs/osc133.md), gotcha 15). The
-> snippet is still the gold path — its OSC 6973 text is authoritative
-> and adds the picker binding — and coexists cleanly.
-
 1. Add the integration to your shell rc (inert outside recorded sessions):
 
    ```sh
@@ -212,6 +152,106 @@ Release tarballs include a man page (`man/backscroll.1`; source is
    > `~/.bashrc` and picks up the snippet. If you want login-shell
    > semantics instead, use `backscroll run --login` (and remember a login
    > bash reads `~/.bash_profile`, *not* `~/.bashrc`).
+
+### …or zero setup at all
+
+If your shell or terminal already emits command marks, `backscroll run`
+records with **nothing installed** — skip step 1 entirely:
+
+| you're running | zero-config | command text comes from |
+|---|---|---|
+| fish ≥ 4.0 | ✓ | native OSC 133 (`cmdline_url`) |
+| nushell | ✓ | reconstructed from the terminal echo |
+| VS Code shell integration in your rc | ✓ | its OSC 633 marks |
+| kitty / WezTerm shell integration in your rc | ✓ | `cmdline=` / `WEZTERM_PROG` |
+| Ghostty, iTerm2, any plain-OSC 133 terminal | ✓ | reconstructed from the terminal echo |
+| PowerShell (Windows/anywhere) | snippet recommended | `init pwsh` (OSC 633 zero-config under VS Code) |
+
+The snippet is still the gold path — its command text is authoritative and
+it adds the **Ctrl-X Ctrl-P** picker and tab completion — and it coexists
+cleanly with all of the above (duplicate marks collapse). Details:
+
+<details>
+<summary><strong>fish ≥ 4.0</strong></summary>
+
+fish 4 emits OSC 133 marks (with the command line attached) natively, so
+`backscroll run` records with zero configuration. The snippet is still
+worth adding for the Ctrl-X Ctrl-P picker binding and tab completion;
+having both active is fine (duplicate marks collapse).
+
+</details>
+
+<details>
+<summary><strong>nushell</strong></summary>
+
+nu ships with shell integration on by default (OSC 133 marks, real exit
+codes, OSC 7 cwd), so `backscroll run` records nu sessions with nothing
+to install. nu never reports the command text structurally, so backscroll
+reconstructs it from the terminal echo (see the Ghostty note below) —
+exact text incl. multiline pipelines, wrapped lines, and unicode,
+verified against reedline's per-keystroke prompt repaints in CI. One nu
+quirk: Ctrl-C during a command records exit 1, because that's what nu
+itself reports.
+
+</details>
+
+<details>
+<summary><strong>VS Code shell integration</strong></summary>
+
+If your shell sources VS Code's `shellIntegration-*.sh` (the
+[manual install](https://code.visualstudio.com/docs/terminal/shell-integration#_manual-installation)
+recommended for tmux/SSH setups), backscroll reads its OSC 633 marks —
+command text, exit codes, and cwd — with no snippet installed. The 633
+metadata is consumed, never stored into recorded output.
+
+</details>
+
+<details>
+<summary><strong>kitty / WezTerm shell integration</strong></summary>
+
+kitty's `kitty.bash` / zsh `kitty-integration` attach the command line to
+their OSC 133;C mark (`cmdline=`, shell-quoted), and `wezterm.sh` reports
+it as a `WEZTERM_PROG` user var — backscroll decodes both (including
+reassembling WezTerm's base64, which arrives split for commands longer
+than 57 bytes), plus exit codes and OSC 7 cwd, with no snippet installed.
+
+</details>
+
+<details>
+<summary><strong>Ghostty, iTerm2, or any plain-OSC 133 terminal</strong></summary>
+
+These emitters mark prompt/command boundaries but never report the
+command text — so backscroll **reconstructs it from the terminal echo**:
+it replays the bytes the shell echoed between the prompt-end and pre-exec
+marks (keystrokes, backspaces, cursor motion, ZLE redraws, even fzf
+popups) through a small terminal-line model and stores the final visible
+line. Real command text, outputs, and exit codes with no snippet
+installed. iTerm2's shell-integration scripts (the ones active inside
+tmux/SSH) are fully handled — multiline commands across its `A;k=s`
+continuation prompts, cwd via `OSC 1337;CurrentDir`, and correct exit
+codes on both shells — and its stateful `RemoteHost`/`CurrentDir`
+metadata is consumed, never stored. Ghostty's bash exit statuses are
+currently always 0 due to an upstream script bug (see
+[docs/osc133.md](docs/osc133.md), gotcha 15).
+
+</details>
+
+<details>
+<summary><strong>Windows</strong></summary>
+
+`backscroll run` records PowerShell through a
+[ConPTY](https://learn.microsoft.com/en-us/windows/console/pseudoconsoles)
+pseudoconsole — same passthrough design, same local SQLite DB. Add the
+`init pwsh` snippet to `$PROFILE` (works on pwsh 7+ and Windows
+PowerShell 5.1) for exact command text, exit codes, and cwd; a shell
+already carrying VS Code's shell integration is zero-config via its
+OSC 633 marks. (`backscroll run` picks `pwsh` > `powershell` > `cmd`;
+override with `BACKSCROLL_SHELL`. cmd.exe has no mark-emitting
+integration, so sessions run fine but nothing gets segmented —
+[Clink](https://chrisant996.github.io/clink/) users can emit OSC 133
+from their prompt filter.)
+
+</details>
 
 ## Bring your existing history
 
@@ -531,7 +571,8 @@ responsibility. backscroll is local-only by design. Still:
 
 ## Status
 
-Early but working: bash, zsh, fish, and nushell on Linux and macOS, with
+Early but working: bash, zsh, fish, and nushell on Linux and macOS, plus
+PowerShell on Windows (ConPTY), with history import (atuin/zsh/bash/fish),
 ignore-patterns, session pause (`off`/`on`), output diffing, the fzf picker
 (`pick`, Ctrl-X Ctrl-P, tmux popups), encrypted cross-machine sync, an MCP
 server for AI agents, a local web UI (`serve`), and a `doctor` command.
