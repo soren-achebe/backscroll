@@ -45,6 +45,24 @@ jobs:
           fi
           BKS_BIN="$PWD/backscroll" BKS_TEST_FISH4="$HOME/.cache/fish-4.8.1/fish" \
             python3 shell/test_fish4_native.py
+      - name: cache nushell 0.114.1
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/nu-0.114.1
+          key: nu-0.114.1-${{ runner.os }}
+      - name: E2E test against nushell native OSC 133 marks (zero-config)
+        if: runner.os == 'Linux'
+        run: |
+          if [ ! -x "$HOME/.cache/nu-0.114.1/nu" ]; then
+            curl -sL -o /tmp/nu.tar.gz https://github.com/nushell/nushell/releases/download/0.114.1/nu-0.114.1-x86_64-unknown-linux-musl.tar.gz
+            echo "ce3a1c5a07c784098b5675224a165e73a45f0f720a8392791d7c3a5b4720255e  /tmp/nu.tar.gz" | sha256sum -c -
+            tar -xzf /tmp/nu.tar.gz -C /tmp
+            mkdir -p "$HOME/.cache/nu-0.114.1"
+            cp /tmp/nu-0.114.1-x86_64-unknown-linux-musl/nu "$HOME/.cache/nu-0.114.1/nu"
+          fi
+          BKS_BIN="$PWD/backscroll" BKS_TEST_NU="$HOME/.cache/nu-0.114.1/nu" \
+            python3 shell/test_nushell.py
       - name: E2E test against VS Code shell integration (OSC 633, zero-config)
         if: runner.os == 'Linux'
         run: |

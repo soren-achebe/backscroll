@@ -37,6 +37,10 @@ Run *backscroll doctor* to verify the setup.
 fish ≥ 4.0 emits OSC 133 marks (with the command line attached) natively,
 so *backscroll run* records it with no snippet at all; the snippet still
 adds the picker binding and tab completion, and both together are fine.
+nushell is fully zero-config as well — nu ships with OSC 133 integration
+on by default, and backscroll reconstructs the command text from the
+terminal echo (nu reports Ctrl-C during a command as exit 1, its own
+convention).
 
 # COMMANDS
 

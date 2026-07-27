@@ -245,7 +245,12 @@ Measured on a 2-vCPU VM (methodology and harnesses in
   Ctrl-C at a prompt vs mid-command, heredocs, exit codes. CI runs the
   bash matrix against a pinned-from-source bash 3.2.57 build on Linux
   *and* `/bin/bash` on a macOS runner (which is 3.2.57, covering BSD
-  `stty` output too).
+  `stty` output too). Zero-config emitters get the same treatment:
+  pinned real fish 4, nushell, VS Code / kitty / WezTerm / Ghostty /
+  iTerm2 integration scripts, each driven end-to-end through
+  `backscroll run` (the nushell suite doubles as a stress test of echo
+  reconstruction — reedline repaints the whole prompt row on every
+  keystroke).
 
 The pattern behind most fixes in the changelog: the protocol is the easy
 80%, and every remaining bug lived in a shell/terminal/version-specific

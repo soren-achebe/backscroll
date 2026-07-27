@@ -698,9 +698,14 @@ func cmdToggle(which string) error {
 	return nil
 }
 
+// rcFor maps $SHELL to its rc file and the hook line to add. A "" rc
+// means the shell needs no snippet at all (it emits OSC 133 natively).
 func rcFor(shell string) (rc string, hook string) {
 	home, _ := os.UserHomeDir()
+	base := filepath.Base(shell)
 	switch {
+	case base == "nu" || base == "nushell":
+		return "", "" // nushell emits OSC 133 + OSC 7 by default
 	case strings.Contains(shell, "zsh"):
 		return home + "/.zshrc", `eval "$(backscroll init zsh)"`
 	case strings.Contains(shell, "fish"):
@@ -749,18 +754,22 @@ func cmdDoctor(args []string) error {
 
 	hooked := os.Getenv("BACKSCROLL_HOOKED") != ""
 	rc, hookLine := rcFor(shell)
-	rcHasHook := false
-	if b, err := os.ReadFile(rc); err == nil {
-		rcHasHook = strings.Contains(string(b), "backscroll init")
-	}
 	if inSession {
-		fmt.Printf("%s shell integration active in this session\n", ok(hooked))
+		fmt.Printf("%s shell integration active in this session\n", ok(hooked || rc == ""))
 	}
-	fmt.Printf("%s rc file references backscroll (%s)", ok(rcHasHook), rc)
-	if !rcHasHook {
-		fmt.Printf("\n    → add:  %s", hookLine)
+	rcHasHook := rc == "" // zero-config shells count as hooked
+	if rc == "" {
+		fmt.Printf("%s shell emits OSC 133 natively — zero-config, no snippet needed\n", ok(true))
+	} else {
+		if b, err := os.ReadFile(rc); err == nil {
+			rcHasHook = strings.Contains(string(b), "backscroll init")
+		}
+		fmt.Printf("%s rc file references backscroll (%s)", ok(rcHasHook), rc)
+		if !rcHasHook {
+			fmt.Printf("\n    → add:  %s", hookLine)
+		}
+		fmt.Println()
 	}
-	fmt.Println()
 
 	st, err := openStore()
 	fmt.Printf("%s database opens (%s)", ok(err == nil), store.DefaultPath())
@@ -793,7 +802,7 @@ func cmdDoctor(args []string) error {
 		fmt.Printf("· redact patterns   : built-ins only (extras: %s — one Go regexp per line)\n", rf)
 	}
 
-	if inSession && hooked && err == nil && serr == nil {
+	if inSession && (hooked || rc == "") && err == nil && serr == nil {
 		fmt.Println("\nall good — your commands are being recorded.")
 	} else if !inSession && rcHasHook && err == nil {
 		fmt.Println("\nsetup looks fine — run `backscroll run` to start recording.")

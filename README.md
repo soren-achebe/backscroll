@@ -118,6 +118,16 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 > still worth adding for the Ctrl-X Ctrl-P picker binding and tab
 > completion; having both active is fine (duplicate marks collapse).
 
+> **nushell?** Fully zero-config — nu ships with shell integration on by
+> default (OSC 133 marks, real exit codes, OSC 7 cwd), so `backscroll
+> run` records nu sessions with nothing to install. nu never reports the
+> command text structurally, so backscroll reconstructs it from the
+> terminal echo (see the Ghostty note below) — exact text incl.
+> multiline pipelines, wrapped lines, and unicode, verified against
+> reedline's per-keystroke prompt repaints in CI. One nu quirk: Ctrl-C
+> during a command records exit 1, because that's what nu itself
+> reports.
+
 > **VS Code shell integration in your rc file?** Also zero-config: if
 > your shell sources VS Code's `shellIntegration-*.sh` (the
 > [manual install](https://code.visualstudio.com/docs/terminal/shell-integration#_manual-installation)
@@ -443,7 +453,7 @@ responsibility. backscroll is local-only by design. Still:
 
 ## Status
 
-Early but working: bash, zsh, and fish on Linux and macOS, with
+Early but working: bash, zsh, fish, and nushell on Linux and macOS, with
 ignore-patterns, session pause (`off`/`on`), output diffing, the fzf picker
 (`pick`, Ctrl-X Ctrl-P, tmux popups), encrypted cross-machine sync, an MCP
 server for AI agents, a local web UI (`serve`), and a `doctor` command.
