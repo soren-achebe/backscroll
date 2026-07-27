@@ -180,7 +180,8 @@ convention).
 
 *doctor*
 	Check that shell integration, database, and environment are set up
-	correctly.
+	correctly. On an empty database it also lists importable history
+	(atuin, zsh, bash, fish) found on this machine, with entry counts.
 
 *doctor --reindex*
 	Rebuild the full-text search index from the stored outputs. Use if

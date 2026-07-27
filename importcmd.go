@@ -147,6 +147,60 @@ Flags:
 	return nil
 }
 
+// histSource is an importable shell-history store found on this machine.
+type histSource struct {
+	Name    string // import subcommand: atuin, zsh, bash, fish
+	Path    string
+	Entries int // parsed entry count; -1 if unreadable
+}
+
+// detectHistSources probes the default locations `backscroll import`
+// would use and counts what each parser can actually extract, so doctor
+// can suggest seeding an empty DB. Order = data richness: atuin carries
+// exits/cwd/durations, the plain files only text (+timestamps if lucky).
+func detectHistSources() []histSource {
+	var out []histSource
+	if p := firstExisting(filepath.Join(xdgData(), "atuin", "history.db")); p != "" {
+		n := -1
+		if entries, err := histimport.ReadAtuin(p); err == nil {
+			n = len(entries)
+		}
+		if n != 0 { // unreadable (-1) is still worth surfacing
+			out = append(out, histSource{"atuin", p, n})
+		}
+	}
+	home, _ := os.UserHomeDir()
+	canonical := map[string][]string{
+		// deliberately NOT $HISTFILE: an exported HISTFILE from the
+		// invoking shell would mis-attribute its file to every shell here
+		"zsh":  {filepath.Join(home, ".zsh_history"), filepath.Join(home, ".histfile")},
+		"bash": {filepath.Join(home, ".bash_history")},
+		"fish": {filepath.Join(xdgData(), "fish", "fish_history")},
+	}
+	for _, sh := range []string{"zsh", "bash", "fish"} {
+		p := firstExisting(canonical[sh]...)
+		if p == "" {
+			continue
+		}
+		n := -1
+		if data, err := os.ReadFile(p); err == nil {
+			switch sh {
+			case "zsh":
+				n = len(histimport.ParseZsh(data))
+			case "bash":
+				n = len(histimport.ParseBash(data))
+			case "fish":
+				n = len(histimport.ParseFish(data))
+			}
+		}
+		if n == 0 {
+			continue // present but empty — nothing to suggest
+		}
+		out = append(out, histSource{sh, p, n})
+	}
+	return out
+}
+
 func firstExisting(paths ...string) string {
 	for _, p := range paths {
 		if p == "" {

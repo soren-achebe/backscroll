@@ -860,6 +860,19 @@ func cmdDoctor(args []string) error {
 	}
 	fmt.Println()
 
+	if serr == nil && s.Commands == 0 {
+		if srcs := detectHistSources(); len(srcs) > 0 {
+			fmt.Println("· empty database — you can seed it from history you already have:")
+			for _, h := range srcs {
+				n := "unreadable"
+				if h.Entries >= 0 {
+					n = fmt.Sprintf("%d entries", h.Entries)
+				}
+				fmt.Printf("    backscroll import %-5s  # %s, %s\n", h.Name, h.Path, n)
+			}
+		}
+	}
+
 	ig := record.IgnoreFile()
 	if _, err := os.Stat(ig); err == nil {
 		n := len(record.LoadIgnore())

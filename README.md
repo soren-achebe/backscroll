@@ -216,7 +216,8 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 ## Bring your existing history
 
 A fresh database means an empty picker. Seed it from the history you
-already have:
+already have (`backscroll doctor` lists what it can find, with entry
+counts):
 
 ```console
 $ backscroll import atuin
