@@ -2,11 +2,10 @@
 
 package main
 
-// E2E: `backscroll run` on a real ConPTY with pwsh + the init pwsh
-// snippet — the full Windows recording path. Drives the recorder's
-// stdin/stdout over pipes (the child still sees a real console: the
-// pseudoconsole), waits for prompt marks in the passthrough stream, and
-// asserts the recorded DB via the CLI.
+// E2E: `backscroll run` on a real ConPTY — the full Windows recording
+// path. Drives the recorder's stdin/stdout over pipes (the child shell
+// still sees a real console: the pseudoconsole), waits for output in
+// the passthrough stream, and asserts the recorded DB via the CLI.
 
 import (
 	"bytes"
@@ -31,10 +30,123 @@ func buildBinary(t *testing.T, dir string) string {
 	return bin
 }
 
-func TestConPTYRecordsPwsh(t *testing.T) {
-	if testing.Short() {
-		t.Skip("short mode")
+// recorder wraps a running `backscroll run` with pipe IO.
+type recorder struct {
+	t     *testing.T
+	cmd   *exec.Cmd
+	stdin interface{ Write([]byte) (int, error) }
+	mu    sync.Mutex
+	out   bytes.Buffer
+	done  chan error
+}
+
+func startRecorder(t *testing.T, bin string, env []string, dir string) *recorder {
+	t.Helper()
+	run := exec.Command(bin, "run")
+	run.Env = env
+	run.Dir = dir
+	stdin, err := run.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
 	}
+	stdout, err := run.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	run.Stderr = run.Stdout
+	if err := run.Start(); err != nil {
+		t.Fatal(err)
+	}
+	r := &recorder{t: t, cmd: run, stdin: stdin, done: make(chan error, 1)}
+	go func() {
+		buf := make([]byte, 32*1024)
+		for {
+			n, err := stdout.Read(buf)
+			if n > 0 {
+				r.mu.Lock()
+				r.out.Write(buf[:n])
+				r.mu.Unlock()
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	go func() { r.done <- run.Wait() }()
+	t.Cleanup(func() {
+		// Make sure the recorder (and its DB handle) is gone before
+		// TempDir cleanup tries to delete files.
+		run.Process.Kill()
+		select {
+		case <-r.done:
+		case <-time.After(10 * time.Second):
+		}
+	})
+	return r
+}
+
+func (r *recorder) snapshot() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.out.String()
+}
+
+func (r *recorder) send(s string) {
+	r.t.Helper()
+	if _, err := r.stdin.Write([]byte(s)); err != nil {
+		r.t.Fatalf("stdin write: %v", err)
+	}
+}
+
+// waitFor blocks until pred(stream) or the deadline; fatal with the full
+// stream on timeout.
+func (r *recorder) waitFor(what string, d time.Duration, pred func(string) bool) {
+	r.t.Helper()
+	deadline := time.Now().Add(d)
+	for time.Now().Before(deadline) {
+		if pred(r.snapshot()) {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	r.t.Fatalf("%s never arrived; full stream (%d bytes):\n%q",
+		what, len(r.snapshot()), r.snapshot())
+}
+
+func (r *recorder) waitExit(d time.Duration) {
+	r.t.Helper()
+	select {
+	case <-r.done:
+	case <-time.After(d):
+		r.cmd.Process.Kill()
+		r.t.Fatalf("run did not exit; full stream:\n%q", r.snapshot())
+	}
+}
+
+// TestConPTYSanityCmd isolates the ConPTY plumbing from shell
+// integration: a plain cmd.exe session must reach a prompt, run a
+// command, and exit. Nothing is recorded (cmd emits no marks) — this
+// pins spawn, resize, passthrough, input translation, and teardown.
+func TestConPTYSanityCmd(t *testing.T) {
+	tmp := t.TempDir()
+	bin := buildBinary(t, tmp)
+	env := append(os.Environ(),
+		"BACKSCROLL_DB="+filepath.Join(tmp, "backscroll.db"),
+		"BACKSCROLL_SHELL=cmd.exe",
+	)
+	r := startRecorder(t, bin, env, tmp)
+	r.waitFor("cmd prompt", 60*time.Second, func(s string) bool {
+		return strings.Contains(s, ">")
+	})
+	r.send("echo conpty-sanity\r")
+	r.waitFor("echo output", 30*time.Second, func(s string) bool {
+		return strings.Count(s, "conpty-sanity") >= 2 // echo + output
+	})
+	r.send("exit\r")
+	r.waitExit(30 * time.Second)
+}
+
+func TestConPTYRecordsPwsh(t *testing.T) {
 	pwsh, err := exec.LookPath("pwsh.exe")
 	if err != nil {
 		t.Skip("pwsh.exe not on PATH")
@@ -55,7 +167,7 @@ func TestConPTYRecordsPwsh(t *testing.T) {
 	if profile == "" {
 		t.Fatal("empty $PROFILE")
 	}
-	prev, hadProfile := os.ReadFile(profile)
+	prev, readErr := os.ReadFile(profile)
 	if err := os.MkdirAll(filepath.Dir(profile), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -64,12 +176,18 @@ func TestConPTYRecordsPwsh(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if hadProfile == nil {
+		if readErr == nil {
 			os.WriteFile(profile, prev, 0o644)
 		} else {
 			os.Remove(profile)
 		}
 	})
+	// Sanity: the snippet itself must load in a fresh interactive-ish
+	// pwsh without errors (catches profile-time failures with real
+	// diagnostics instead of a silent hang).
+	diag, diagErr := exec.Command(pwsh, "-NoProfile", "-Command",
+		"$env:BACKSCROLL_ACTIVE='1'; & \""+bin+"\" init pwsh | Out-String | Invoke-Expression; 'SNIPPET-OK'").CombinedOutput()
+	t.Logf("snippet load check (err=%v):\n%s", diagErr, diag)
 
 	db := filepath.Join(tmp, "backscroll.db")
 	env := append(os.Environ(),
@@ -77,81 +195,25 @@ func TestConPTYRecordsPwsh(t *testing.T) {
 		"BACKSCROLL_SHELL="+pwsh,
 	)
 
-	run := exec.Command(bin, "run")
-	run.Env = env
-	run.Dir = tmp
-	stdin, err := run.StdinPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	stdout, err := run.StdoutPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	run.Stderr = run.Stdout
-	if err := run.Start(); err != nil {
-		t.Fatal(err)
-	}
+	r := startRecorder(t, bin, env, tmp)
 
-	var mu sync.Mutex
-	var out bytes.Buffer
-	go func() {
-		buf := make([]byte, 32*1024)
-		for {
-			n, err := stdout.Read(buf)
-			if n > 0 {
-				mu.Lock()
-				out.Write(buf[:n])
-				mu.Unlock()
-			}
-			if err != nil {
-				return
-			}
-		}
-	}()
-	snapshot := func() string {
-		mu.Lock()
-		defer mu.Unlock()
-		return out.String()
-	}
-
-	// Wait until the stream contains `want` copies of the prompt-end
-	// mark (133;B) — i.e. the shell is at prompt number `want`.
+	// Prompt-end mark count n means the shell is at prompt number n.
 	waitPrompt := func(want int) {
-		deadline := time.Now().Add(90 * time.Second)
-		for time.Now().Before(deadline) {
-			if strings.Count(snapshot(), "]133;B") >= want {
-				return
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-		t.Fatalf("prompt %d never arrived; stream tail:\n%q", want, tail(snapshot(), 2000))
-	}
-
-	send := func(s string) {
-		if _, err := stdin.Write([]byte(s)); err != nil {
-			t.Fatalf("stdin write: %v", err)
-		}
+		r.waitFor(fmt.Sprintf("prompt %d", want), 120*time.Second, func(s string) bool {
+			return strings.Count(s, "]133;B") >= want
+		})
 	}
 
 	waitPrompt(1) // startup + profile
-	send("echo hello-conpty\r")
+	r.send("echo hello-conpty\r")
 	waitPrompt(2)
-	send("cmd /c \"exit 7\"\r")
+	r.send("cmd /c \"exit 7\"\r")
 	waitPrompt(3)
-	send("Get-Location\r")
+	r.send("Get-Location\r")
 	waitPrompt(4)
-	send("\r") // empty accept: must store nothing
-	send("exit\r")
-
-	done := make(chan error, 1)
-	go func() { done <- run.Wait() }()
-	select {
-	case <-done:
-	case <-time.After(60 * time.Second):
-		run.Process.Kill()
-		t.Fatalf("run did not exit; stream tail:\n%q", tail(snapshot(), 2000))
-	}
+	r.send("\r") // empty accept: must store nothing
+	r.send("exit\r")
+	r.waitExit(60 * time.Second)
 
 	cli := func(args ...string) string {
 		c := exec.Command(bin, args...)
@@ -192,11 +254,4 @@ func TestConPTYRecordsPwsh(t *testing.T) {
 	if !strings.Contains(found, "echo hello-conpty") {
 		t.Errorf("search missed output text:\n%s", found)
 	}
-}
-
-func tail(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[len(s)-n:]
 }
