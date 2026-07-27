@@ -70,11 +70,21 @@ def have(tool):
 
 
 def session_env(home, shell):
+    if shell == "zsh":
+        # CI runner images ship global zsh rc files (compinit's compaudit
+        # prompt eats keystrokes and stalls the PTY). `backscroll run`
+        # spawns $SHELL bare, so point SHELL at a --no-globalrcs wrapper.
+        sh = os.path.join(home, "zsh-wrapper")
+        with open(sh, "w") as f:
+            f.write('#!/bin/sh\nexec zsh --no-globalrcs "$@"\n')
+        os.chmod(sh, 0o755)
+    else:
+        sh = shutil.which(shell) or f"/usr/bin/{shell}"
     return {
         "HOME": home,
         "TERM": "xterm-256color",
         "PATH": f"{TOOLBIN}:/usr/local/bin:/usr/bin:/bin" if TOOLBIN else "/usr/local/bin:/usr/bin:/bin",
-        "SHELL": shutil.which(shell) or f"/usr/bin/{shell}",
+        "SHELL": sh,
         "LANG": "C.UTF-8",
         "XDG_DATA_HOME": f"{home}/.local/share",
         "XDG_CONFIG_HOME": f"{home}/.config",
