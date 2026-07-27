@@ -15,12 +15,13 @@ import (
 
 // cmdExport renders stored commands for sharing: a markdown code block you
 // can paste into a GitHub issue or Slack, an asciicast v2 file you can play
-// with asciinema, or plain JSON for scripting. Commands are picked either
+// with asciinema, plain JSON for scripting, or a self-contained HTML page
+// (dark theme, full ANSI color, zero JS). Commands are picked either
 // by explicit ids / -N offsets, or by the shared list/search filters
 // (--exit fail --since 1d → today's failures, oldest first).
 func cmdExport(args []string) error {
 	fs := flag.NewFlagSet("export", flag.ExitOnError)
-	format := fs.String("format", "md", "output format: md, cast, json")
+	format := fs.String("format", "md", "output format: md, cast, json, html")
 	details := fs.Bool("details", false, "md: wrap in a collapsible <details> block")
 	raw := fs.Bool("raw", false, "md/json: keep ANSI colors (cast always keeps them)")
 	doRedact := fs.Bool("redact", false, "mask secrets (tokens, keys, passwords) before exporting")
@@ -107,8 +108,10 @@ func cmdExport(args []string) error {
 		return exportCast(w, cmds)
 	case "json":
 		return exportJSON(w, cmds, *raw)
+	case "html":
+		return exportHTML(w, cmds)
 	default:
-		return fmt.Errorf("unknown format %q (md, cast, json)", *format)
+		return fmt.Errorf("unknown format %q (md, cast, json, html)", *format)
 	}
 }
 

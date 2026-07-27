@@ -210,6 +210,7 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 | `backscroll export --exit fail --since 1d` | every failure from today as one markdown report — filters work here too |
 | `backscroll export 3141 --format cast` | asciicast v2 — replay with `asciinema play` |
 | `backscroll export -1 --format json` | structured record for scripting |
+| `backscroll export -1 --format html -o out.html` | self-contained HTML page with full ANSI color — attach to a ticket, share as-is |
 | `backscroll sync init ~/Sync/bks` | cross-machine sync through any shared folder — encrypted, serverless ([details](#cross-machine-sync)) |
 | `... --host laptop` / `--host local` | list/search/pick filter: only that machine's history |
 | `backscroll stats` | how much is stored |

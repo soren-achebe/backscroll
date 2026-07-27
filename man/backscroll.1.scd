@@ -91,9 +91,11 @@ convention).
 	argument, diffs against the previous run of the *same* command -
 	"what changed since last time?". Exit codes follow diff(1).
 
-*export* [_id_|*-N* ...] [_filters_] [*--format* *md*|*cast*|*json*] [*--details*] [*--redact*] [*-o* _FILE_]
+*export* [_id_|*-N* ...] [_filters_] [*--format* *md*|*cast*|*json*|*html*] [*--details*] [*--redact*] [*-o* _FILE_]
 	Share commands and their outputs: GitHub-flavored markdown (default),
-	asciinema v2 cast, or JSON. Pick commands by explicit ids / *-N*
+	asciinema v2 cast, JSON, or a self-contained HTML page (dark theme,
+	full ANSI color, no JavaScript — attach it to a ticket or open it
+	locally). Pick commands by explicit ids / *-N*
 	offsets, or with the shared filters (see _FILTERS_): *export --exit
 	fail --since 1d* renders today's failures oldest-first (*-n* caps how
 	many, default 20 newest matches).

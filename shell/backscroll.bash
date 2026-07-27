@@ -156,7 +156,7 @@ _backscroll_complete() {
   elif [ "${COMP_WORDS[1]}" = "init" ]; then
     COMPREPLY=($(compgen -W "bash zsh fish tmux zellij screen" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "export" ] && { [ "$prev" = "--format" ] || [ "$prev" = "-format" ]; }; then
-    COMPREPLY=($(compgen -W "md cast json" -- "$cur"))
+    COMPREPLY=($(compgen -W "md cast json html" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "export" ]; then
     case "$prev" in
       --exit|-exit) COMPREPLY=($(compgen -W "fail 0 1 2" -- "$cur")) ;;

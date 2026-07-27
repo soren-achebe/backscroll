@@ -50,7 +50,7 @@ if (( $+functions[compdef] )); then
     elif [[ $words[2] == init ]]; then
       compadd bash zsh fish tmux zellij screen
     elif [[ $words[2] == export && $words[CURRENT-1] == (--format|-format) ]]; then
-      compadd md cast json
+      compadd md cast json html
     elif [[ $words[2] == export ]]; then
       if [[ $words[CURRENT-1] == (--exit|-exit) ]]; then
         compadd fail 0 1 2

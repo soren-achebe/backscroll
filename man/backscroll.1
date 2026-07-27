@@ -117,10 +117,12 @@ argument, diffs against the previous run of the \fBsame\fR command -
 "what changed since last time?\&".\& Exit codes follow diff(1).\&
 .P
 .RE
-\fBexport\fR [\fIid\fR|\fB-N\fR .\&.\&.\&] [\fIfilters\fR] [\fB--format\fR \fBmd\fR|\fBcast\fR|\fBjson\fR] [\fB--details\fR] [\fB--redact\fR] [\fB-o\fR \fIFILE\fR]
+\fBexport\fR [\fIid\fR|\fB-N\fR .\&.\&.\&] [\fIfilters\fR] [\fB--format\fR \fBmd\fR|\fBcast\fR|\fBjson\fR|\fBhtml\fR] [\fB--details\fR] [\fB--redact\fR] [\fB-o\fR \fIFILE\fR]
 .RS 4
 Share commands and their outputs: GitHub-flavored markdown (default),
-asciinema v2 cast, or JSON.\& Pick commands by explicit ids / \fB-N\fR
+asciinema v2 cast, JSON, or a self-contained HTML page (dark theme,
+full ANSI color, no JavaScript — attach it to a ticket or open it
+locally).\& Pick commands by explicit ids / \fB-N\fR
 offsets, or with the shared filters (see \fIFILTERS\fR): \fBexport --exit
 fail --since 1d\fR renders today'\&s failures oldest-first (\fB-n\fR caps how
 many, default 20 newest matches).\&
