@@ -84,9 +84,12 @@ adds the picker binding and tab completion, and both together are fine.
 	argument, diffs against the previous run of the *same* command -
 	"what changed since last time?". Exit codes follow diff(1).
 
-*export* [_id_|*-N* ...] [*--format* *md*|*cast*|*json*] [*--details*] [*--redact*] [*-o* _FILE_]
+*export* [_id_|*-N* ...] [_filters_] [*--format* *md*|*cast*|*json*] [*--details*] [*--redact*] [*-o* _FILE_]
 	Share commands and their outputs: GitHub-flavored markdown (default),
-	asciinema v2 cast, or JSON.
+	asciinema v2 cast, or JSON. Pick commands by explicit ids / *-N*
+	offsets, or with the shared filters (see _FILTERS_): *export --exit
+	fail --since 1d* renders today's failures oldest-first (*-n* caps how
+	many, default 20 newest matches).
 
 *sync* <*init* _dir_|*export*|*import*|*status*>
 	Cross-machine history sync through a shared directory (Syncthing,
@@ -144,7 +147,7 @@ adds the picker binding and tab completion, and both together are fine.
 
 # FILTERS
 
-*list*, *search*, and *pick* accept:
+*list*, *search*, *pick*, and *export* accept:
 
 *--cwd* _DIR_
 	Only commands launched in _DIR_ or beneath it.

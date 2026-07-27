@@ -334,7 +334,7 @@ func cmdList(args []string) error {
 		return err
 	}
 	if len(cmds) == 0 {
-		if f.Session > 0 || f.Cwd != "" || f.ExitSet || f.Failed || !f.Since.IsZero() || f.Host != "" {
+		if f.Active() {
 			fmt.Println("no commands match those filters")
 		} else {
 			fmt.Println("no recorded commands yet — start a session with: backscroll run")

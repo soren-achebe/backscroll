@@ -15,7 +15,9 @@ import (
 
 // cmdExport renders stored commands for sharing: a markdown code block you
 // can paste into a GitHub issue or Slack, an asciicast v2 file you can play
-// with asciinema, or plain JSON for scripting.
+// with asciinema, or plain JSON for scripting. Commands are picked either
+// by explicit ids / -N offsets, or by the shared list/search filters
+// (--exit fail --since 1d → today's failures, oldest first).
 func cmdExport(args []string) error {
 	fs := flag.NewFlagSet("export", flag.ExitOnError)
 	format := fs.String("format", "md", "output format: md, cast, json")
@@ -23,22 +25,22 @@ func cmdExport(args []string) error {
 	raw := fs.Bool("raw", false, "md/json: keep ANSI colors (cast always keeps them)")
 	doRedact := fs.Bool("redact", false, "mask secrets (tokens, keys, passwords) before exporting")
 	out := fs.String("o", "", "write to file instead of stdout")
+	n := fs.Int("n", 20, "with filters: export at most the newest `n` matches")
+	mkFilter := filterFlags(fs)
 
 	// Accept ids and bare -N offsets anywhere (like show/diff): -1 = last,
-	// -2 = one before, etc. Anything that parses as an integer is a target;
-	// the rest is passed to the flag parser in original order.
-	var flags, pos []string
-	for _, a := range args {
-		if _, err := strconv.ParseInt(a, 10, 64); err == nil {
-			pos = append(pos, a)
-			continue
-		}
-		flags = append(flags, a)
-	}
+	// -2 = one before, etc. splitTargets knows which flags consume a value,
+	// so "--exit 1" or "-n 5" is never mistaken for a target id.
+	flags, pos := splitTargets(fs, args)
 	fs.Parse(flags)
 	pos = append(pos, fs.Args()...)
-	if len(pos) == 0 {
-		pos = []string{"-1"} // default: last command
+
+	f, err := mkFilter(*n)
+	if err != nil {
+		return err
+	}
+	if f.Active() && len(pos) > 0 {
+		return fmt.Errorf("give explicit ids or filters, not both")
 	}
 
 	st, err := openStore()
@@ -48,16 +50,37 @@ func cmdExport(args []string) error {
 	defer st.Close()
 
 	var cmds []*store.Command
-	for _, p := range pos {
-		n, err := strconv.ParseInt(p, 10, 64)
+	if f.Active() {
+		rows, err := st.List(f)
 		if err != nil {
-			return fmt.Errorf("bad id %q (want an id or -N offset)", p)
+			return err
 		}
-		c, err := st.Get(n)
-		if err != nil {
-			return fmt.Errorf("%s: not found (%v)", p, err)
+		if len(rows) == 0 {
+			return fmt.Errorf("no commands match those filters")
 		}
-		cmds = append(cmds, c)
+		// List is newest-first; export reads best oldest-first.
+		for i := len(rows) - 1; i >= 0; i-- {
+			c, err := st.Get(rows[i].ID)
+			if err != nil {
+				return fmt.Errorf("%d: %v", rows[i].ID, err)
+			}
+			cmds = append(cmds, c)
+		}
+	} else {
+		if len(pos) == 0 {
+			pos = []string{"-1"} // default: last command
+		}
+		for _, p := range pos {
+			n, err := strconv.ParseInt(p, 10, 64)
+			if err != nil {
+				return fmt.Errorf("bad id %q (want an id or -N offset)", p)
+			}
+			c, err := st.Get(n)
+			if err != nil {
+				return fmt.Errorf("%s: not found (%v)", p, err)
+			}
+			cmds = append(cmds, c)
+		}
 	}
 	if *doRedact {
 		extra := redact.LoadExtra()
@@ -87,6 +110,37 @@ func cmdExport(args []string) error {
 	default:
 		return fmt.Errorf("unknown format %q (md, cast, json)", *format)
 	}
+}
+
+// splitTargets separates positional id/-N targets from flag tokens. It must
+// run before fs.Parse but after all flags are registered: when a token is a
+// registered non-boolean flag without an inline =value, the following token
+// is kept with it, so numeric flag values ("--exit 1", "-n 5") are never
+// misread as target ids.
+func splitTargets(fs *flag.FlagSet, args []string) (flags, targets []string) {
+	valueFlag := func(name string) bool {
+		fl := fs.Lookup(name)
+		if fl == nil {
+			return false
+		}
+		b, ok := fl.Value.(interface{ IsBoolFlag() bool })
+		return !(ok && b.IsBoolFlag())
+	}
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if _, err := strconv.ParseInt(a, 10, 64); err == nil {
+			targets = append(targets, a)
+			continue
+		}
+		flags = append(flags, a)
+		if strings.HasPrefix(a, "-") && !strings.Contains(a, "=") {
+			if name := strings.TrimLeft(a, "-"); valueFlag(name) && i+1 < len(args) {
+				i++
+				flags = append(flags, args[i])
+			}
+		}
+	}
+	return flags, targets
 }
 
 func exportOutput(c *store.Command, raw bool) []byte {

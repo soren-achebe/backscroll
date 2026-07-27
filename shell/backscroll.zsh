@@ -51,6 +51,16 @@ if (( $+functions[compdef] )); then
       compadd bash zsh fish tmux zellij
     elif [[ $words[2] == export && $words[CURRENT-1] == (--format|-format) ]]; then
       compadd md cast json
+    elif [[ $words[2] == export ]]; then
+      if [[ $words[CURRENT-1] == (--exit|-exit) ]]; then
+        compadd fail 0 1 2
+      elif [[ $words[CURRENT-1] == (--cwd|-cwd) ]]; then
+        _files -/
+      elif [[ $words[CURRENT-1] == -o ]]; then
+        _files
+      elif [[ $words[CURRENT] == -* ]]; then
+        compadd -- --format --details --raw --redact -o -n --session --cwd --exit --since --host
+      fi
     elif [[ $words[2] == sync && CURRENT == 3 ]]; then
       compadd init export import status
     elif [[ $words[2] == doctor ]]; then

@@ -110,10 +110,13 @@ argument, diffs against the previous run of the \fBsame\fR command -
 "what changed since last time?\&".\& Exit codes follow diff(1).\&
 .P
 .RE
-\fBexport\fR [\fIid\fR|\fB-N\fR .\&.\&.\&] [\fB--format\fR \fBmd\fR|\fBcast\fR|\fBjson\fR] [\fB--details\fR] [\fB--redact\fR] [\fB-o\fR \fIFILE\fR]
+\fBexport\fR [\fIid\fR|\fB-N\fR .\&.\&.\&] [\fIfilters\fR] [\fB--format\fR \fBmd\fR|\fBcast\fR|\fBjson\fR] [\fB--details\fR] [\fB--redact\fR] [\fB-o\fR \fIFILE\fR]
 .RS 4
 Share commands and their outputs: GitHub-flavored markdown (default),
-asciinema v2 cast, or JSON.\&
+asciinema v2 cast, or JSON.\& Pick commands by explicit ids / \fB-N\fR
+offsets, or with the shared filters (see \fIFILTERS\fR): \fBexport --exit
+fail --since 1d\fR renders today'\&s failures oldest-first (\fB-n\fR caps how
+many, default 20 newest matches).\&
 .P
 .RE
 \fBsync\fR <\fBinit\fR \fIdir\fR|\fBexport\fR|\fBimport\fR|\fBstatus\fR>
@@ -192,7 +195,7 @@ after older backscroll versions wrote to the same database).\&
 .RE
 .SH FILTERS
 .P
-\fBlist\fR, \fBsearch\fR, and \fBpick\fR accept:
+\fBlist\fR, \fBsearch\fR, \fBpick\fR, and \fBexport\fR accept:
 .P
 \fB--cwd\fR \fIDIR\fR
 .RS 4

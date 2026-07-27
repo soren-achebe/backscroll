@@ -44,12 +44,16 @@ complete -c backscroll -f
 complete -c backscroll -n __fish_use_subcommand -a "run init list last show search pick diff export sync stats prune delete redact mcp serve off on doctor version help"
 complete -c backscroll -n "__fish_seen_subcommand_from init" -a "bash zsh fish tmux zellij"
 complete -c backscroll -n "__fish_seen_subcommand_from export" -l format -a "md cast json"
-complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -s n -d "max results" -x
-complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -l session -d "only this session id" -x
-complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -l cwd -d "only this dir (or beneath)" -r -a "(__fish_complete_directories)"
-complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -l exit -d "only this exit code" -x -a "fail 0 1 2"
-complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -l since -d "only newer than (2h, 3d, 1w, date)" -x
-complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -l host -d "only this synced host (local = this machine)" -x
+complete -c backscroll -n "__fish_seen_subcommand_from export" -l details -d "md: fold into a <details> block"
+complete -c backscroll -n "__fish_seen_subcommand_from export" -l raw -d "keep ANSI colors"
+complete -c backscroll -n "__fish_seen_subcommand_from export" -l redact -d "mask secrets before exporting"
+complete -c backscroll -n "__fish_seen_subcommand_from export" -s o -d "write to file" -r
+complete -c backscroll -n "__fish_seen_subcommand_from list last search pick export" -s n -d "max results" -x
+complete -c backscroll -n "__fish_seen_subcommand_from list last search pick export" -l session -d "only this session id" -x
+complete -c backscroll -n "__fish_seen_subcommand_from list last search pick export" -l cwd -d "only this dir (or beneath)" -r -a "(__fish_complete_directories)"
+complete -c backscroll -n "__fish_seen_subcommand_from list last search pick export" -l exit -d "only this exit code" -x -a "fail 0 1 2"
+complete -c backscroll -n "__fish_seen_subcommand_from list last search pick export" -l since -d "only newer than (2h, 3d, 1w, date)" -x
+complete -c backscroll -n "__fish_seen_subcommand_from list last search pick export" -l host -d "only this synced host (local = this machine)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from search" -s C -d "context lines around matches (grep -C)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from search" -s A -d "lines after matches (grep -A)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from search" -s B -d "lines before matches (grep -B)" -x

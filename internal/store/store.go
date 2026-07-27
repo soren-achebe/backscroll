@@ -513,6 +513,12 @@ func likeEscape(s string) string {
 	return r.Replace(s)
 }
 
+// Active reports whether any narrowing filter is set (Limit alone is not a
+// filter).
+func (f Filter) Active() bool {
+	return f.Session > 0 || f.Cwd != "" || f.ExitSet || f.Failed || !f.Since.IsZero() || f.Host != ""
+}
+
 func (f Filter) limit() int {
 	if f.Limit <= 0 {
 		return 20

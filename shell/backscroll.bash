@@ -157,6 +157,16 @@ _backscroll_complete() {
     COMPREPLY=($(compgen -W "bash zsh fish tmux zellij" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "export" ] && { [ "$prev" = "--format" ] || [ "$prev" = "-format" ]; }; then
     COMPREPLY=($(compgen -W "md cast json" -- "$cur"))
+  elif [ "${COMP_WORDS[1]}" = "export" ]; then
+    case "$prev" in
+      --exit|-exit) COMPREPLY=($(compgen -W "fail 0 1 2" -- "$cur")) ;;
+      --cwd|-cwd)   COMPREPLY=($(compgen -d -- "$cur")) ;;
+      -o)           COMPREPLY=($(compgen -f -- "$cur")) ;;
+      --since|-since|--session|-session|--host|-host|-n) ;;
+      *) case "$cur" in
+           -*) COMPREPLY=($(compgen -W "--format --details --raw --redact -o -n --session --cwd --exit --since --host" -- "$cur")) ;;
+         esac ;;
+    esac
   elif [ "${COMP_WORDS[1]}" = "sync" ] && [ "$COMP_CWORD" -eq 2 ]; then
     COMPREPLY=($(compgen -W "init export import status" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "doctor" ]; then

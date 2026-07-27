@@ -191,11 +191,12 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 | `backscroll pick` | fuzzy-pick a command (fzf) with live output preview |
 | **Ctrl-X Ctrl-P** at the prompt | pick a past command and insert it at your cursor (current line becomes the query) |
 | `backscroll list -n 50` | recent commands with exit/duration/size |
-| `... --exit fail --since 2h` | list/search filters: failures only, last 2 hours |
+| `... --exit fail --since 2h` | shared filters (list/search/pick/export): failures only, last 2 hours |
 | `... --cwd .` | only commands run in this directory (or beneath it) |
 | `backscroll diff 3141` | what changed vs. the **previous run of the same command** |
 | `backscroll diff -2 -1` | unified diff of any two stored outputs (`-U n` context) |
 | `backscroll export -1` | command + output as a markdown block, ready to paste into an issue (`--details` folds it) |
+| `backscroll export --exit fail --since 1d` | every failure from today as one markdown report — filters work here too |
 | `backscroll export 3141 --format cast` | asciicast v2 — replay with `asciinema play` |
 | `backscroll export -1 --format json` | structured record for scripting |
 | `backscroll sync init ~/Sync/bks` | cross-machine sync through any shared folder — encrypted, serverless ([details](#cross-machine-sync)) |
