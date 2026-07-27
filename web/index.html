@@ -97,6 +97,11 @@ pre { margin:0; padding:12px 14px; overflow-x:auto; max-height:65vh;
 .dl{color:var(--bad)} .in{color:var(--ok)}
 kbd { background:var(--panel2); border:1px solid var(--border); border-radius:4px;
   padding:0 5px; font-size:11px; }
+/* in-view search match highlight (client-side, over rendered output) */
+pre mark.hlm { background:var(--mark); color:var(--bg); border-radius:2px; }
+pre mark.hlm.cur { background:var(--accent); color:var(--bg); }
+.hlnav { display:inline-flex; gap:4px; align-items:center; }
+.hlnav button { padding:4px 7px; }
 </style>
 </head>
 <body>
@@ -255,8 +260,107 @@ async function toggle(row) {
     const d = await (await fetch("/api/cmd/" + row.dataset.id)).json();
     body.innerHTML = bodyHTML(d, false);
     wireBody(body, d, row.dataset.id);
+    const qs = q.value.trim();
+    if (qs) wireHl(body, qs);
   }
   body.classList.add("open");
+}
+
+// --- in-view match highlighting -------------------------------------------
+// hlTerms("foo \"bar baz\"") -> lowercase substrings to highlight; FTS
+// operators dropped; longest first so overlaps merge into the longer term.
+function hlTerms(qs) {
+  const out = [];
+  for (let t of qs.split(/\s+/)) {
+    t = t.replace(/^"+|"+$/g, "").toLowerCase();
+    if (t && !/^(and|or|not|near)$/.test(t) && !out.includes(t)) out.push(t);
+  }
+  return out.sort((a, b) => b.length - a.length);
+}
+
+// hlApply wraps every occurrence of the terms in <mark class=hlm data-g=N>,
+// working across text-node boundaries (ANSI color spans split words). Ranges
+// are found on the concatenated text, merged, then applied back-to-front so
+// earlier offsets stay valid. Returns the number of match groups.
+function hlApply(pre, ts) {
+  if (!ts.length) return 0;
+  const walker = document.createTreeWalker(pre, NodeFilter.SHOW_TEXT);
+  const nodes = [], starts = [];
+  let text = "", n;
+  while ((n = walker.nextNode())) { nodes.push(n); starts.push(text.length); text += n.data; }
+  const lo = text.toLowerCase();
+  const ranges = [];
+  for (const t of ts) {
+    let i = 0;
+    while ((i = lo.indexOf(t, i)) !== -1) { ranges.push([i, i + t.length]); i += 1; }
+  }
+  ranges.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+  const merged = [];
+  for (const r of ranges) {
+    const last = merged[merged.length - 1];
+    if (last && r[0] < last[1]) { if (r[1] > last[1]) last[1] = r[1]; }
+    else merged.push(r.slice());
+  }
+  if (merged.length > 2000) merged.length = 2000;
+  for (let gi = merged.length - 1; gi >= 0; gi--) {
+    const [s, e] = merged[gi];
+    for (let ni = nodes.length - 1; ni >= 0; ni--) {
+      const ns = starts[ni], ne = ns + nodes[ni].data.length;
+      if (ne <= s) break;
+      if (ns >= e) continue;
+      const node = nodes[ni];
+      const from = Math.max(s - ns, 0), to = Math.min(e - ns, node.data.length);
+      const mid = node.splitText(from);
+      mid.splitText(to - from);
+      const mark = document.createElement("mark");
+      mark.className = "hlm";
+      mark.dataset.g = gi;
+      node.parentNode.replaceChild(mark, mid);
+      mark.appendChild(mid);
+    }
+  }
+  return merged.length;
+}
+
+// wireHl adds the ↑ 1/N ↓ jumper to an opened row while a search is active.
+// Marks are re-queried from the DOM on every jump so the diff-view toggle
+// (which swaps pre.innerHTML and restores it) can't leave stale references.
+function wireHl(body, qs) {
+  const pre = body.querySelector("pre");
+  const total = hlApply(pre, hlTerms(qs));
+  if (!total) return;
+  const groups = () => {
+    const map = new Map();
+    for (const m of pre.querySelectorAll("mark.hlm")) {
+      if (!map.has(m.dataset.g)) map.set(m.dataset.g, []);
+      map.get(m.dataset.g).push(m);
+    }
+    return [...map.values()];
+  };
+  const span = document.createElement("span");
+  span.className = "hlnav";
+  span.innerHTML = '<button class="hprev" title="previous match">↑</button>' +
+    '<span class="hcount"></span>' +
+    '<button class="hnext" title="next match">↓</button>';
+  const bar = body.querySelector(".toolbar");
+  bar.insertBefore(span, bar.querySelector(".copy"));
+  const count = span.querySelector(".hcount");
+  let cur = 0;
+  function go(i) {
+    const gs = groups();
+    if (!gs.length) return; // diff view is showing; marks come back on toggle
+    cur = ((i % gs.length) + gs.length) % gs.length;
+    for (const m of pre.querySelectorAll("mark.hlm.cur")) m.classList.remove("cur");
+    for (const m of gs[cur]) m.classList.add("cur");
+    count.textContent = (cur + 1) + "/" + gs.length;
+    const m = gs[cur][0];
+    const pr = pre.getBoundingClientRect(), mr = m.getBoundingClientRect();
+    pre.scrollTop += mr.top - pr.top - pre.clientHeight / 2 + 20;
+    pre.scrollLeft += mr.left - pr.left - pre.clientWidth / 2;
+  }
+  span.querySelector(".hprev").onclick = ev => { ev.stopPropagation(); go(cur - 1); };
+  span.querySelector(".hnext").onclick = ev => { ev.stopPropagation(); go(cur + 1); };
+  go(0);
 }
 
 function exitHTML(c) {

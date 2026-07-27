@@ -356,7 +356,9 @@ history:
   the hood — instant even with tens of thousands of commands), with
   match snippets, plus the same filters as the CLI (failures only, time
   range). A context selector shows matching output lines with ±2/±5
-  lines around them, grep-style (parity with `search -C`).
+  lines around them, grep-style (parity with `search -C`). Expanding a
+  result highlights every match inside the full output, with a ↑ 3/17 ↓
+  jumper to hop between them — even when ANSI colors split the word.
 - **Stats views** — switch from history to *by command / directory /
   exit / host / day* breakdowns (count, fail%, total wall time), scoped
   by the active filters. Directory, exit, and host rows are clickable:
