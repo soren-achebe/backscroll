@@ -219,7 +219,7 @@ before the snippet to opt out. (In bash the binding needs bash ≥ 4.0;
 on macOS's stock bash 3.2 it's skipped — recording itself still works
 there.)
 
-## tmux / screen / SSH
+## tmux / zellij / screen / SSH
 
 backscroll wraps a shell, so it composes with multiplexers naturally —
 just decide which side of tmux you want it on:
@@ -239,6 +239,12 @@ just decide which side of tmux you want it on:
   that fuzzy-searches every recorded command with a live preview of its
   stored output (`prefix + F` = failures only). Any pane, any time —
   enter pages through the full output, `q` back to work.
+- **zellij:** same story — record inside each pane, and
+  `backscroll init zellij` prints a keybinds snippet that puts the same
+  fuzzy search in a floating pane on `Alt b` (`Alt Shift b` = failures
+  only). Append it to `~/.config/zellij/config.kdl` if you have no
+  `keybinds` block yet; otherwise copy the two `bind` lines into your
+  existing one (zellij ignores a second `keybinds` block).
 - **Over SSH:** backscroll records on whichever machine the shell runs.
   Install it on the remote host and add the rc snippet there; use
   [sync](#cross-machine-sync) if you want the histories merged.

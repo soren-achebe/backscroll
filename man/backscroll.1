@@ -61,13 +61,14 @@ shell so that bash reads \fI~/.\&bashrc\fR; pass \fB--login\fR for login-shell
 semantics (note that a login bash does not read \fI~/.\&bashrc\fR).\&
 .P
 .RE
-\fBinit\fR <\fBbash\fR|\fBzsh\fR|\fBfish\fR|\fBtmux\fR>
+\fBinit\fR <\fBbash\fR|\fBzsh\fR|\fBfish\fR|\fBtmux\fR|\fBzellij\fR>
 .RS 4
 Print the shell-integration snippet (OSC 133 marks, cwd reporting,
 tab completion, and a \fBCtrl-X Ctrl-P\fR binding that opens \fBpick\fR and
 inserts the selected command at the prompt — set
 \fI$BACKSCROLL_NO_BIND\fR to skip the binding) for the given shell, or a
-tmux popup key-binding snippet for \fI~/.\&tmux.\&conf\fR.\&
+tmux popup key-binding snippet for \fI~/.\&tmux.\&conf\fR, or a zellij
+floating-pane keybinds snippet for \fI~/.\&config/zellij/config.\&kdl\fR.\&
 .P
 .RE
 \fBlist\fR [\fB-n\fR \fIN\fR] [\fIfilters\fR]

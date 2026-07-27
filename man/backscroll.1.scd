@@ -47,12 +47,13 @@ adds the picker binding and tab completion, and both together are fine.
 	shell so that bash reads _~/.bashrc_; pass *--login* for login-shell
 	semantics (note that a login bash does not read _~/.bashrc_).
 
-*init* <*bash*|*zsh*|*fish*|*tmux*>
+*init* <*bash*|*zsh*|*fish*|*tmux*|*zellij*>
 	Print the shell-integration snippet (OSC 133 marks, cwd reporting,
 	tab completion, and a *Ctrl-X Ctrl-P* binding that opens *pick* and
 	inserts the selected command at the prompt — set
 	_$BACKSCROLL_NO_BIND_ to skip the binding) for the given shell, or a
-	tmux popup key-binding snippet for _~/.tmux.conf_.
+	tmux popup key-binding snippet for _~/.tmux.conf_, or a zellij
+	floating-pane keybinds snippet for _~/.config/zellij/config.kdl_.
 
 *list* [*-n* _N_] [_filters_]
 	List recent commands. Aliased as *last*.

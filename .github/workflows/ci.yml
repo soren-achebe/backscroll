@@ -111,6 +111,24 @@ jobs:
           BKS_BIN="$PWD/backscroll" BKS_TEST_ITERM2_BASH=/tmp/iterm2.bash \
             BKS_TEST_ITERM2_ZSH=/tmp/iterm2.zsh \
             python3 shell/test_iterm2.py
+      - name: cache zellij 0.44.3
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/zellij-0.44.3
+          key: zellij-0.44.3-${{ runner.os }}
+      - name: E2E test of the zellij integration (floating pick keybinds)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y -qq fzf
+          if [ ! -x "$HOME/.cache/zellij-0.44.3/zellij" ]; then
+            mkdir -p "$HOME/.cache/zellij-0.44.3"
+            curl -sL -o /tmp/zellij.tar.gz https://github.com/zellij-org/zellij/releases/download/v0.44.3/zellij-x86_64-unknown-linux-musl.tar.gz
+            echo "0f7c346788627f506c0a28296517768633cff24fc822a739f8264b640ecad751  /tmp/zellij.tar.gz" | sha256sum -c -
+            tar xzf /tmp/zellij.tar.gz -C "$HOME/.cache/zellij-0.44.3"
+          fi
+          BKS_BIN="$PWD/backscroll" BKS_TEST_ZELLIJ="$HOME/.cache/zellij-0.44.3/zellij" \
+            python3 shell/test_zellij.py
       - name: cache bash 3.2.57
         if: runner.os == 'Linux'
         uses: actions/cache@v4

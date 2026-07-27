@@ -1,0 +1,18 @@
+// backscroll zellij integration (needs fzf on your PATH)
+//
+// If your config.kdl has NO `keybinds` block yet (or you have no config file):
+//     backscroll init zellij >> ~/.config/zellij/config.kdl
+// This block merges with zellij's default keybinds.
+//
+// If you ALREADY have a `keybinds` block: zellij ignores a second one —
+// copy just the two `bind` lines below into your existing
+// `shared_except "locked" { ... }` section instead.
+
+keybinds {
+    shared_except "locked" {
+        // Alt b — fuzzy-search every recorded command + output in a floating pane
+        bind "Alt b" { Run "backscroll" "pick" "--pager" { floating true; close_on_exit true; name "backscroll"; }; }
+        // Alt Shift b — same, but only failed commands
+        bind "Alt Shift b" { Run "backscroll" "pick" "--pager" "--exit" "fail" { floating true; close_on_exit true; name "backscroll (failures)"; }; }
+    }
+}

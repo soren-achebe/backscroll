@@ -54,13 +54,17 @@ var fishInit string
 //go:embed shell/backscroll.tmux
 var tmuxInit string
 
+//go:embed shell/backscroll.kdl
+var zellijInit string
+
 const usage = `backscroll — never lose a command's output again
 
 Usage:
   backscroll run                 start a recorded shell session
   backscroll init <bash|zsh|fish> print shell-integration snippet
                                  (add: eval "$(backscroll init zsh)" to rc;
-                                  fish: backscroll init fish | source)
+                                  fish: backscroll init fish | source);
+                                 also: init tmux | init zellij popup binds
   backscroll list [-n N]         recent commands; filter with --cwd DIR,
                                  --exit CODE|fail, --since 2h|3d|1w|DATE,
                                  --session ID, --host NAME|local
@@ -73,7 +77,7 @@ Usage:
                                  each matching output line (-C 0 = matches only)
   backscroll pick [query]        interactive fuzzy picker (needs fzf) with
                                  live output preview; enter = view output.
-                                 --pager for tmux popups, --print-id,
+                                 --pager for tmux/zellij popups, --print-id,
                                  --print-cmd; same filters as list
   backscroll diff <a> [b]        diff two stored outputs (ids or -N offsets);
                                  with one arg, diffs against the previous run
@@ -194,7 +198,7 @@ func cmdRun(args []string) error {
 
 func cmdInit(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: backscroll init <bash|zsh|fish|tmux>")
+		return fmt.Errorf("usage: backscroll init <bash|zsh|fish|tmux|zellij>")
 	}
 	switch args[0] {
 	case "zsh":
@@ -205,8 +209,10 @@ func cmdInit(args []string) error {
 		fmt.Print(fishInit)
 	case "tmux":
 		fmt.Print(tmuxInit)
+	case "zellij":
+		fmt.Print(zellijInit)
 	default:
-		return fmt.Errorf("unsupported target %q (bash, zsh, fish, tmux)", args[0])
+		return fmt.Errorf("unsupported target %q (bash, zsh, fish, tmux, zellij)", args[0])
 	}
 	return nil
 }

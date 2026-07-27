@@ -154,7 +154,7 @@ _backscroll_complete() {
   if [ "$COMP_CWORD" -eq 1 ]; then
     COMPREPLY=($(compgen -W "run init list last show search pick diff export sync stats prune delete redact mcp serve off on doctor version help" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "init" ]; then
-    COMPREPLY=($(compgen -W "bash zsh fish tmux" -- "$cur"))
+    COMPREPLY=($(compgen -W "bash zsh fish tmux zellij" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "export" ] && { [ "$prev" = "--format" ] || [ "$prev" = "-format" ]; }; then
     COMPREPLY=($(compgen -W "md cast json" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "sync" ] && [ "$COMP_CWORD" -eq 2 ]; then
