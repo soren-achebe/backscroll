@@ -216,16 +216,16 @@ func TestParseBashMixed(t *testing.T) {
 
 func TestNeedsCont(t *testing.T) {
 	cases := map[string]bool{
-		`echo hi`:            false,
-		`echo 'open`:         true,
-		`echo 'closed'`:      false,
-		`echo "open`:         true,
-		`echo trailing\`:     true,
-		`echo esc\\`:         false, // escaped backslash, complete
-		`echo "a'b"`:         false, // single quote inside double
-		`echo 'a"b'`:         false,
-		`echo "esc\"still`:   true,
-		`echo 'lit\'`:        true, // backslash is literal in single quotes; quote closed, but trailing... 
+		`echo hi`:          false,
+		`echo 'open`:       true,
+		`echo 'closed'`:    false,
+		`echo "open`:       true,
+		`echo trailing\`:   true,
+		`echo esc\\`:       false, // escaped backslash, complete
+		`echo "a'b"`:       false, // single quote inside double
+		`echo 'a"b'`:       false,
+		`echo "esc\"still`: true,
+		`echo 'lit\'`:      true, // backslash is literal in single quotes; quote closed, but trailing...
 	}
 	delete(cases, `echo 'lit\'`) // covered ambiguously by shells; skip
 	for s, want := range cases {
