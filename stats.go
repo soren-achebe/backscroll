@@ -76,7 +76,12 @@ type statGroup struct {
 	count int
 	fails int
 	dur   time.Duration
+	spark []int // per-time-bucket counts across the filtered range
 }
+
+// sparkBuckets is the number of time buckets behind the activity
+// sparkline in breakdowns (CLI column and web UI cell).
+const sparkBuckets = 12
 
 func statsBreakdown(dim string, topN int, f store.Filter) error {
 	st, err := openStore()
@@ -103,6 +108,8 @@ func statsBreakdown(dim string, topN int, f store.Filter) error {
 			list = list[len(list)-topN:] // most recent days
 		}
 		printDayTable(list)
+		fmt.Printf("\n(%d commands total)\n", len(cmds))
+		return nil
 	} else {
 		shown := list
 		if topN > 0 && len(list) > topN {
@@ -110,25 +117,43 @@ func statsBreakdown(dim string, topN int, f store.Filter) error {
 		}
 		printStatTable(dim, shown)
 		if len(shown) < len(list) {
-			fmt.Printf("\n(top %d of %d — %d commands total; -n 0 for all)\n",
-				len(shown), len(list), len(cmds))
+			fmt.Printf("\n(top %d of %d — %d commands total%s; -n 0 for all)\n",
+				len(shown), len(list), len(cmds), sparkSpanNote(cmds))
 			return nil
 		}
 	}
-	fmt.Printf("\n(%d commands total)\n", len(cmds))
+	fmt.Printf("\n(%d commands total%s)\n", len(cmds), sparkSpanNote(cmds))
 	return nil
+}
+
+// sparkSpanNote labels the time range the activity sparklines cover.
+func sparkSpanNote(cmds []store.Command) string {
+	first, last, ok := statTimeRange(cmds)
+	if !ok {
+		return ""
+	}
+	f, l := first.Local().Format("2006-01-02"), last.Local().Format("2006-01-02")
+	if f == l {
+		return ", activity on " + f
+	}
+	return ", activity " + f + " → " + l
 }
 
 // groupStats buckets commands along one dimension and sorts the result:
 // day → chronological, everything else → count desc, key asc. Shared by
 // the stats CLI and the web UI's /api/stats?by= endpoint.
 func groupStats(cmds []store.Command, dim string) []*statGroup {
+	first, last, spanOK := statTimeRange(cmds)
+	span := last.Sub(first)
 	groups := map[string]*statGroup{}
 	for _, c := range cmds {
 		key := statKey(dim, c)
 		g := groups[key]
 		if g == nil {
 			g = &statGroup{key: key}
+			if spanOK {
+				g.spark = make([]int, sparkBuckets)
+			}
 			groups[key] = g
 		}
 		g.count++
@@ -139,6 +164,13 @@ func groupStats(cmds []store.Command, dim string) []*statGroup {
 			if d := c.EndedAt.Sub(c.StartedAt); d > 0 {
 				g.dur += d
 			}
+		}
+		if spanOK && !c.StartedAt.IsZero() {
+			b := sparkBuckets - 1
+			if span > 0 {
+				b = int(int64(c.StartedAt.Sub(first)) * sparkBuckets / (int64(span) + 1))
+			}
+			g.spark[b]++
 		}
 	}
 	list := make([]*statGroup, 0, len(groups))
@@ -156,6 +188,55 @@ func groupStats(cmds []store.Command, dim string) []*statGroup {
 		})
 	}
 	return list
+}
+
+// statTimeRange finds the first and last start time across the filtered
+// commands (imported ts-less entries are skipped). ok is false when fewer
+// than one timestamped command exists — then no sparklines are drawn.
+func statTimeRange(cmds []store.Command) (first, last time.Time, ok bool) {
+	for _, c := range cmds {
+		if c.StartedAt.IsZero() {
+			continue
+		}
+		if !ok || c.StartedAt.Before(first) {
+			first = c.StartedAt
+		}
+		if !ok || c.StartedAt.After(last) {
+			last = c.StartedAt
+		}
+		ok = true
+	}
+	return first, last, ok
+}
+
+var sparkRunes = []rune("▁▂▃▄▅▆▇█")
+
+// sparkline renders per-bucket counts as a fixed-width run of block
+// characters, scaled to the group's own busiest bucket; empty buckets
+// stay blank so gaps in activity are visible.
+func sparkline(buckets []int) string {
+	max := 0
+	for _, n := range buckets {
+		if n > max {
+			max = n
+		}
+	}
+	if max == 0 {
+		return strings.Repeat(" ", len(buckets))
+	}
+	var b strings.Builder
+	for _, n := range buckets {
+		if n == 0 {
+			b.WriteByte(' ')
+			continue
+		}
+		idx := (n*len(sparkRunes) - 1) / max
+		if idx >= len(sparkRunes) {
+			idx = len(sparkRunes) - 1
+		}
+		b.WriteRune(sparkRunes[idx])
+	}
+	return b.String()
 }
 
 // statKey computes the grouping key of one command for a dimension.
@@ -290,14 +371,25 @@ func printStatTable(dim string, list []*statGroup) {
 		"exit": "exit", "host": "host",
 	}[dim]
 	home, _ := os.UserHomeDir()
-	fmt.Printf("  \x1b[2m%7s  %5s  %10s  %s\x1b[0m\n", "count", "fail%", "total time", label)
+	withSpark := len(list) > 0 && list[0].spark != nil
+	if withSpark {
+		fmt.Printf("  \x1b[2m%7s  %5s  %10s  %-*s  %s\x1b[0m\n",
+			"count", "fail%", "total time", sparkBuckets, "activity", label)
+	} else {
+		fmt.Printf("  \x1b[2m%7s  %5s  %10s  %s\x1b[0m\n", "count", "fail%", "total time", label)
+	}
 	for _, g := range list {
 		key := statDisplayKey(dim, g.key, home)
 		failPct := "-"
 		if g.fails > 0 {
 			failPct = fmt.Sprintf("%d%%", (g.fails*100+g.count/2)/g.count)
 		}
-		fmt.Printf("  %7d  %5s  %10s  %s\n", g.count, failPct, humanDur(g.dur), key)
+		if withSpark {
+			fmt.Printf("  %7d  %5s  %10s  \x1b[36m%s\x1b[0m  %s\n",
+				g.count, failPct, humanDur(g.dur), sparkline(g.spark), key)
+		} else {
+			fmt.Printf("  %7d  %5s  %10s  %s\n", g.count, failPct, humanDur(g.dur), key)
+		}
 	}
 }
 

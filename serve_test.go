@@ -482,3 +482,32 @@ func TestBrowseURL(t *testing.T) {
 		}
 	}
 }
+
+func TestServeStatsSpark(t *testing.T) {
+	_, h := newTestServer(t, false)
+	_, body := get(t, h, "/api/stats?by=cmd")
+	if body["spark_from"] == nil || body["spark_to"] == nil {
+		t.Fatalf("missing spark range: %v", body)
+	}
+	top := body["groups"].([]any)[0].(map[string]any) // curl, 2 runs
+	sp, ok := top["spark"].([]any)
+	if !ok || len(sp) != sparkBuckets {
+		t.Fatalf("spark = %v, want %d buckets", top["spark"], sparkBuckets)
+	}
+	sum := 0.0
+	for _, v := range sp {
+		sum += v.(float64)
+	}
+	if sum != top["count"].(float64) {
+		t.Errorf("spark sum %v != count %v", sum, top["count"])
+	}
+
+	// day rows are already a time histogram — no spark, no range
+	_, body = get(t, h, "/api/stats?by=day")
+	if body["spark_from"] != nil {
+		t.Errorf("day breakdown has spark range: %v", body["spark_from"])
+	}
+	if g := body["groups"].([]any)[0].(map[string]any); g["spark"] != nil {
+		t.Errorf("day group has spark: %v", g["spark"])
+	}
+}

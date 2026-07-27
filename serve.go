@@ -465,6 +465,10 @@ type statJSON struct {
 	// filterable (cmd, day, "?" exits) or when --redact altered it
 	// (a redacted string would filter to nothing).
 	Raw string `json:"raw,omitempty"`
+	// Spark is the per-time-bucket activity count across the filtered
+	// range (sparkBuckets buckets, oldest first); omitted when no
+	// command in the set has a start time.
+	Spark []int `json:"spark,omitempty"`
 }
 
 // statRawKey returns the filterable raw key for a breakdown row, or ""
@@ -527,15 +531,24 @@ func (s *webServer) breakdown(w http.ResponseWriter, dim string, q url.Values) {
 		if s.redact {
 			key, _ = redact.String(key, s.extra)
 		}
-		out = append(out, statJSON{
+		j := statJSON{
 			Key: key, Count: g.count, Fails: g.fails,
 			DurMs: g.dur.Milliseconds(),
 			Raw:   statRawKey(dim, g.key, s.redact, s.extra),
-		})
+		}
+		if dim != "day" { // day rows already are a time histogram
+			j.Spark = g.spark
+		}
+		out = append(out, j)
 	}
-	writeJSON(w, map[string]any{
+	resp := map[string]any{
 		"by": dim, "groups": out, "total": len(cmds), "distinct": len(list),
-	})
+	}
+	if first, last, ok := statTimeRange(cmds); ok && dim != "day" {
+		resp["spark_from"] = first.Local().Format("2006-01-02")
+		resp["spark_to"] = last.Local().Format("2006-01-02")
+	}
+	writeJSON(w, resp)
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

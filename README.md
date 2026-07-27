@@ -263,7 +263,7 @@ incremental: it only adds entries it hasn't seen.
 | `backscroll sync init ~/Sync/bks` | cross-machine sync through any shared folder — encrypted, serverless ([details](#cross-machine-sync)) |
 | `... --host laptop` / `--host local` | list/search/pick filter: only that machine's history |
 | `backscroll stats` | how much is stored |
-| `backscroll stats --by cmd --exit fail --since 1w` | what failed most this week — count, fail%, total wall time per command (`--by cwd\|exit\|host\|day` too) |
+| `backscroll stats --by cmd --exit fail --since 1w` | what failed most this week — count, fail%, total wall time and an activity sparkline per command (`--by cwd\|exit\|host\|day` too) |
 | `backscroll prune --older 30d` | forget old entries |
 | `backscroll delete <id>` | forget one entry (that `curl -H "Authorization: ..."`) |
 | `backscroll redact <id\|-N>` | permanently mask tokens/keys/passwords in a stored entry (`--dry-run` previews) |

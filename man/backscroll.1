@@ -175,7 +175,10 @@ subcommand: "git push", not "git"), \fB--by cwd\fR by directory,
 origin machine (synced history), \fB--by day\fR as a per-day histogram.\&
 The shared \fBlist\fR filters scope the breakdown: \fBbackscroll stats --by
 cmd --exit fail --since 1w\fR is "what failed most this week".\& \fB-n\fR
-caps the rows shown (default 15; 0 = all).\&
+caps the rows shown (default 15; 0 = all).\& Each row also carries an
+\fIactivity\fR sparkline — 12 time buckets across the filtered range
+showing \fIwhen\fR that group ran (entries imported from shell history
+without timestamps are left out).\&
 .P
 .RE
 \fBprune\fR \fB--older\fR \fI30d\fR

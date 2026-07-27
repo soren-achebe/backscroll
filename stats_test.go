@@ -129,3 +129,94 @@ func TestCmdHeadOperators(t *testing.T) {
 		}
 	}
 }
+
+func TestSparkline(t *testing.T) {
+	cases := []struct {
+		in   []int
+		want string
+	}{
+		{[]int{0, 0, 0, 0}, "    "},
+		{[]int{1, 0, 0, 1}, "█  █"},
+		{[]int{1, 2, 4, 8}, "▁▂▄█"},
+		{[]int{8, 8, 8, 8}, "████"},
+		{[]int{1}, "█"},
+	}
+	for _, c := range cases {
+		if got := sparkline(c.in); got != c.want {
+			t.Errorf("sparkline(%v) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestGroupStatsSpark(t *testing.T) {
+	at := func(day int) time.Time {
+		return time.Date(2026, 7, day, 12, 0, 0, 0, time.Local)
+	}
+	mk := func(cmd string, t0 time.Time) store.Command {
+		return store.Command{Cmd: cmd, StartedAt: t0,
+			ExitCode: sql.NullInt64{Valid: true}}
+	}
+	cmds := []store.Command{
+		mk("ls", at(1)),         // range start → bucket 0
+		mk("ls", at(13)),        // end → bucket sparkBuckets-1
+		mk("git st", at(7)),     // middle
+		mk("hist", time.Time{}), // ts-less import: excluded from spark
+	}
+	list := groupStats(cmds, "cmd")
+	byKey := map[string]*statGroup{}
+	for _, g := range list {
+		byKey[g.key] = g
+	}
+	ls := byKey["ls"]
+	if ls == nil || len(ls.spark) != sparkBuckets {
+		t.Fatalf("ls spark = %v, want %d buckets", ls, sparkBuckets)
+	}
+	if ls.spark[0] != 1 || ls.spark[sparkBuckets-1] != 1 {
+		t.Errorf("ls edge buckets = %v", ls.spark)
+	}
+	sum := 0
+	for _, n := range ls.spark {
+		sum += n
+	}
+	if sum != 2 {
+		t.Errorf("ls spark sum = %d, want 2", sum)
+	}
+	g := byKey["git st"]
+	mid, midN := -1, 0
+	for i, n := range g.spark {
+		if n > 0 {
+			mid, midN = i, midN+n
+		}
+	}
+	if midN != 1 || mid == 0 || mid == sparkBuckets-1 {
+		t.Errorf("git spark = %v, want single middle bucket", g.spark)
+	}
+	h := byKey["hist"]
+	for _, n := range h.spark {
+		if n != 0 {
+			t.Errorf("ts-less entry landed in spark: %v", h.spark)
+		}
+	}
+
+	// first/last of the range
+	first, last, ok := statTimeRange(cmds)
+	if !ok || !first.Equal(at(1)) || !last.Equal(at(13)) {
+		t.Errorf("statTimeRange = %v %v %v", first, last, ok)
+	}
+
+	// zero span: every command at the same instant → last bucket, no panic
+	one := []store.Command{mk("x", at(5)), mk("x", at(5))}
+	lg := groupStats(one, "cmd")[0]
+	if lg.spark[sparkBuckets-1] != 2 {
+		t.Errorf("zero-span spark = %v, want all in last bucket", lg.spark)
+	}
+
+	// no timestamps at all → no spark allocated
+	none := groupStats([]store.Command{mk("y", time.Time{})}, "cmd")[0]
+	if none.spark != nil {
+		t.Errorf("all-ts-less spark = %v, want nil", none.spark)
+	}
+	if _, _, ok := statTimeRange([]store.Command{mk("y", time.Time{})}); ok {
+		t.Error("statTimeRange ok on ts-less set")
+	}
+}

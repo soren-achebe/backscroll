@@ -141,7 +141,10 @@ convention).
 	origin machine (synced history), *--by day* as a per-day histogram.
 	The shared *list* filters scope the breakdown: *backscroll stats --by
 	cmd --exit fail --since 1w* is "what failed most this week". *-n*
-	caps the rows shown (default 15; 0 = all).
+	caps the rows shown (default 15; 0 = all). Each row also carries an
+	_activity_ sparkline — 12 time buckets across the filtered range
+	showing _when_ that group ran (entries imported from shell history
+	without timestamps are left out).
 
 *prune* *--older* _30d_
 	Delete entries older than the given age.

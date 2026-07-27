@@ -16,6 +16,11 @@ jobs:
         with:
           go-version: "1.24"
       - run: go vet ./...
+      - name: gofmt
+        if: runner.os == 'Linux'
+        run: |
+          out="$(gofmt -l .)"
+          if [ -n "$out" ]; then echo "gofmt needed on:"; echo "$out"; exit 1; fi
       - run: go test ./...
       - run: go build .
       - name: shell integration PTY tests (bash, zsh, fish)

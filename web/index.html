@@ -63,6 +63,7 @@ table.stats td { padding:5px 12px; border-bottom:1px solid var(--border); vertic
 table.stats td.num { text-align:right; color:var(--fg); white-space:nowrap; }
 table.stats td.key { overflow-wrap:anywhere; }
 table.stats .bar { color:var(--c6); letter-spacing:-1px; }
+table.stats td.spark { color:var(--c6); white-space:pre; font-variant-numeric:tabular-nums; opacity:.8; }
 table.stats tr.clk { cursor:pointer; }
 table.stats tr.clk:hover td { background:var(--row-hover, rgba(255,255,255,.04)); }
 #cwdchip, #daychip { display:none; align-items:center; gap:4px; font-size:12px; color:var(--c6);
@@ -179,6 +180,14 @@ async function refresh() {
   }).join("");
 }
 
+const SPARKCH = "\u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588";
+function spark(b) {
+  if (!b || !b.length) return "";
+  const mx = Math.max(...b);
+  if (!mx) return "";
+  return b.map(n => n ? SPARKCH[Math.min(7, Math.floor((n * 8 - 1) / mx))] : "\u2007").join("");
+}
+
 async function refreshStats(view, p) {
   p.set("by", view);
   p.set("n", "25");
@@ -187,10 +196,12 @@ async function refreshStats(view, p) {
   catch (e) { if (e.name !== "AbortError") list.innerHTML = '<div class="empty">server gone — restart <b>backscroll serve</b></div>'; return; }
   const gs = d.groups || [];
   if (!gs.length) { list.innerHTML = '<div class="empty">nothing here</div>'; return; }
+  const span = d.spark_from ? (d.spark_from === d.spark_to ? 'on ' + esc(d.spark_from) : esc(d.spark_from) + ' → ' + esc(d.spark_to)) : '';
   const max = Math.max(...gs.map(g => g.count));
   const label = {cmd:"command",cwd:"directory",exit:"exit",host:"host",day:"day"}[view] || view;
   list.innerHTML =
-    '<table class="stats"><tr><th>' + label + '</th><th style="text-align:right">count</th><th></th><th style="text-align:right">fail%</th><th style="text-align:right">total time</th></tr>' +
+    '<table class="stats"><tr><th>' + label + '</th><th style="text-align:right">count</th><th></th><th style="text-align:right">fail%</th><th style="text-align:right">total time</th>' +
+    (span ? '<th title="when these ran, ' + span + '">activity</th>' : '') + '</tr>' +
     gs.map(g => {
       const pct = Math.round(g.fails * 100 / g.count);
       const bar = "█".repeat(Math.max(1, Math.round(g.count * 18 / max)));
@@ -198,10 +209,12 @@ async function refreshStats(view, p) {
       return '<tr' + clk + '><td class="key">' + esc(g.key) + '</td>' +
         '<td class="num">' + g.count + '</td><td class="bar">' + bar + '</td>' +
         '<td class="num">' + (g.fails ? '<span class="exit-bad">' + pct + '%</span>' : '<span class="di">–</span>') + '</td>' +
-        '<td class="num">' + (g.dur_ms > 0 ? dur(g.dur_ms) : '<span class="di">–</span>') + '</td></tr>';
+        '<td class="num">' + (g.dur_ms > 0 ? dur(g.dur_ms) : '<span class="di">–</span>') + '</td>' +
+        (span ? '<td class="spark" title="when these ran, ' + span + '">' + spark(g.spark) + '</td>' : '') + '</tr>';
     }).join("") + '</table>' +
     '<div class="statnote">' + d.total + ' commands · ' + d.distinct + ' groups' +
-      (d.distinct > gs.length ? ' · top ' + gs.length + ' shown' : '') + '</div>';
+      (d.distinct > gs.length ? ' · top ' + gs.length + ' shown' : '') +
+      (span ? ' · activity ' + span : '') + '</div>';
 }
 
 function bodyHTML(d, perm) {
