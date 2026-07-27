@@ -21,7 +21,7 @@ jobs:
       - name: shell integration PTY tests (bash, zsh, fish)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq zsh fish
+          sudo apt-get update -qq && sudo apt-get install -y -qq zsh fish fzf
           pip install --quiet pexpect
           curl -sL https://raw.githubusercontent.com/rcaloras/bash-preexec/master/bash-preexec.sh -o /tmp/bash-preexec.sh
           python3 shell/test_bash_integration.py
@@ -252,7 +252,7 @@ jobs:
           fetch_pin powerlevel10k https://github.com/romkatv/powerlevel10k.git 9253fb1c5034410c43a0c681ff8294181c54016c
       - name: run compatibility matrix
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq zsh fish
+          sudo apt-get update -qq && sudo apt-get install -y -qq zsh fish fzf
           pip install --quiet pexpect
           curl -sL https://raw.githubusercontent.com/rcaloras/bash-preexec/master/bash-preexec.sh -o /tmp/bash-preexec.sh
           T="$HOME/.cache/bks-compat-tools"

@@ -249,6 +249,16 @@ reconstruction are shared verbatim. Two hard-won specifics:
   either; resize is a 500 ms poll, and no SIGHUP grace: closing the
   console window kills the tree.)
 
+One PowerShell trap that isn't ConPTY's fault: inside a PSReadLine key
+handler, PowerShell pipes a native command's **stderr** instead of
+handing the child the terminal. Launch a TUI like fzf with a plain
+`& backscroll pick` there and its interface — drawn on stderr — is
+swallowed while its keystrokes still land: to the user it looks like
+the shell hung. The `init pwsh` picker binding therefore starts the
+process via `System.Diagnostics.Process` with *only stdout* redirected,
+so the UI stays on the real terminal and only the selection is
+captured.
+
 ## What it costs
 
 Measured on a 2-vCPU VM (methodology and harnesses in

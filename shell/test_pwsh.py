@@ -53,7 +53,13 @@ def main():
     spaced = os.path.join(HOME, "dir with space")
     os.makedirs(spaced, exist_ok=True)
 
+    # the picker key handler invokes bare `backscroll`; put it on PATH
+    bindir = os.path.join(HOME, "bin")
+    os.makedirs(bindir, exist_ok=True)
+    os.symlink(BKS, os.path.join(bindir, "backscroll"))
+
     env = dict(os.environ, HOME=HOME, TERM="xterm-256color", SHELL=PWSH,
+               PATH=bindir + os.pathsep + os.environ.get("PATH", ""),
                XDG_CONFIG_HOME=os.path.join(HOME, ".config"),
                XDG_DATA_HOME=os.path.join(HOME, ".local", "share"),
                XDG_CACHE_HOME=os.path.join(HOME, ".cache"))
@@ -145,7 +151,114 @@ def main():
     check("cwd percent-decoded (dir with space)",
           "echo in-spaced-dir" in spaced_rows, spaced_rows[:300])
 
+    picker_phase(env)
+
     report()
+
+
+def picker_phase(env):
+    """Ctrl-X Ctrl-P picker: UI visible (the stderr-pipe trap), insert,
+    initial query from the typed line, cancel preserves the buffer."""
+    if not shutil.which("fzf", path=env["PATH"]):
+        print("  [skip] picker checks: fzf not on PATH")
+        return
+
+    chunks = []
+
+    class Log:
+        def write(self, d):
+            chunks.append(d)
+
+        def flush(self):
+            pass
+
+    def snap():
+        return b"".join(chunks)
+
+    child = pexpect.spawn(BKS, ["run"], env=env, cwd=HOME, timeout=20,
+                          dimensions=(24, 120))
+    child.logfile_read = Log()
+    answered = 0
+
+    def pump(dur):
+        nonlocal answered
+        end = time.time() + dur
+        while time.time() < end:
+            try:
+                child.read_nonblocking(4096, timeout=0.1)
+            except pexpect.TIMEOUT:
+                pass
+            except pexpect.EOF:
+                return
+            tail = snap()[answered:]
+            if b"\x1b[6n" in tail:
+                child.send(b"\x1b[24;1R")
+            if b"\x1b[0c" in tail:
+                child.send(b"\x1b[?1;2c")
+            answered = len(snap())
+
+    def pump_until(needle, timeout=10.0):
+        end = time.time() + timeout
+        start = len(snap())
+        while time.time() < end:
+            pump(0.3)
+            if needle in snap()[start:]:
+                return True
+        return False
+
+    pump(6.0)  # startup + profile + first prompt
+    child.send(b"echo pick-target-zeta-77\r")
+    pump(1.2)
+
+    # Chord at an empty prompt: fzf UI must actually render. With a plain
+    # `& backscroll pick` capture, PowerShell pipes the native command's
+    # stderr inside key handlers and the UI is invisible (keystrokes still
+    # land) — this check pins the Process-based launch that avoids it.
+    child.send(b"\x18\x10")  # C-x C-p
+    check("picker: fzf UI visible (stderr reaches the tty)",
+          pump_until(b"pick-target-zeta-77"))
+
+    child.send(b"zeta")  # narrow
+    pump(1.0)
+    child.send(b"\r")    # accept -> insert at prompt (NOT executed)
+    check("picker: pick inserted at redrawn prompt",
+          pump_until(b"pick-target-zeta-77"))
+    child.send(b"\r")    # now run the inserted command
+    pump(1.5)
+
+    # Initial query: typed line seeds fzf; Esc cancels; buffer preserved.
+    child.send(b"echo pick-cancel-keep")
+    pump(0.8)
+    child.send(b"\x18\x10")
+    # UI up: the typed line is seeded as fzf's query and rendered by it
+    # (it fuzzy-matches nothing, so the candidate list is empty here)
+    pump_until(b"pick-cancel-keep", 6.0)
+    child.send(b"\x1b")  # Esc = cancel
+    check("picker: cancel redraws prompt with typed line intact",
+          pump_until(b"pick-cancel-keep", 6.0))
+    child.send(b"\r")    # run the preserved original line
+    pump(1.5)
+
+    child.send(b"exit\r")
+    pump(1.5)
+    try:
+        child.expect(pexpect.EOF, timeout=10)
+        child.close()
+        check("picker: session exits cleanly", True)
+    except pexpect.TIMEOUT:
+        child.close(force=True)
+        check("picker: session exits cleanly", False, "EOF timeout")
+        return
+
+    listing = bks("list", "-n", "40")
+    runs = listing.count("echo pick-target-zeta-77")
+    check("picker: inserted command ran and was recorded (2 total)",
+          runs == 2, f"count={runs}\n{listing[-500:]}")
+    check("picker: cancelled line ran as typed",
+          "echo pick-cancel-keep" in listing)
+    check("picker: no phantom/stub entries",
+          "(unknown command)" not in listing and "fzf" not in listing,
+          listing[-400:])
 
 
 def report():

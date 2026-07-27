@@ -66,3 +66,50 @@ if ($env:BACKSCROLL_ACTIVE -and -not $env:BACKSCROLL_HOOKED) {
         "$E]133;D;$ec$B$E]7;file://$mach$p$B$E]133;A$B$body$E]133;B$B"
     }
 }
+
+# Ctrl-X Ctrl-P: fuzzy-pick a past command (with output preview) and insert
+# it at the prompt. Active in and out of recorded sessions; set
+# BACKSCROLL_NO_BIND=1 before loading to skip. Needs fzf and PSReadLine.
+if (-not $env:BACKSCROLL_NO_BIND -and (Get-Module PSReadLine)) {
+    Set-PSReadLineKeyHandler -Chord 'Ctrl+x,Ctrl+p' `
+        -BriefDescription 'backscrollPick' `
+        -Description 'backscroll: fuzzy-pick a past command (with output preview) and insert it' `
+        -ScriptBlock {
+        $line = ''
+        $cursor = 0
+        [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState(
+            [ref]$line, [ref]$cursor)
+        # Inside a key handler PowerShell pipes a native command's stderr,
+        # so fzf's UI (drawn on stderr) would be INVISIBLE while its
+        # keystrokes still land — `& backscroll pick` looks like a hang.
+        # Start the process directly with only stdout redirected: stderr
+        # stays on the real terminal and the UI renders normally.
+        $psi = [System.Diagnostics.ProcessStartInfo]::new('backscroll')
+        $psi.RedirectStandardOutput = $true
+        $psi.UseShellExecute = $false
+        if ($PSVersionTable.PSVersion.Major -ge 6) {
+            foreach ($a in @('pick', '--print-cmd', '--', "$line")) {
+                [void]$psi.ArgumentList.Add($a)
+            }
+        } else {
+            # .NET Framework (Windows PowerShell 5.1) has no ArgumentList;
+            # compose the argument string with MSVCRT-style quoting.
+            $q = ($line -replace '(\\*)"', '$1$1\"') -replace '(\\+)$', '$1$1'
+            $psi.Arguments = 'pick --print-cmd -- "' + $q + '"'
+        }
+        try {
+            $p = [System.Diagnostics.Process]::Start($psi)
+        } catch {
+            return  # backscroll not on PATH; nothing sensible to do
+        }
+        $sel = $p.StandardOutput.ReadToEnd().TrimEnd("`r", "`n")
+        $p.WaitForExit()
+        # fzf has scribbled over the prompt row; redraw, then replace the
+        # buffer with the pick (cancelled pick = just redraw).
+        [Microsoft.PowerShell.PSConsoleReadLine]::InvokePrompt()
+        if ($sel) {
+            [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
+            [Microsoft.PowerShell.PSConsoleReadLine]::Insert($sel)
+        }
+    }
+}
