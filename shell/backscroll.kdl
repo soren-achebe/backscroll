@@ -5,7 +5,7 @@
 // This block merges with zellij's default keybinds.
 //
 // If you ALREADY have a `keybinds` block: zellij ignores a second one —
-// copy just the two `bind` lines below into your existing
+// copy just the three `bind` lines below into your existing
 // `shared_except "locked" { ... }` section instead.
 
 keybinds {
@@ -14,5 +14,10 @@ keybinds {
         bind "Alt b" { Run "backscroll" "pick" "--pager" { floating true; close_on_exit true; name "backscroll"; }; }
         // Alt Shift b — same, but only failed commands
         bind "Alt Shift b" { Run "backscroll" "pick" "--pager" "--exit" "fail" { floating true; close_on_exit true; name "backscroll (failures)"; }; }
+        // Alt r — pick a command and TYPE it at your prompt (insert, don't run).
+        // Multiline commands are wrapped in bracketed paste so embedded
+        // newlines don't press Enter. Note: hands focus back with
+        // toggle-floating-panes, so other floating panes get hidden too.
+        bind "Alt r" { Run "sh" "-c" r#"c=$(backscroll pick --print-cmd); [ -n "$c" ] || exit 0; [ "$(printf %s "$c" | wc -l)" -gt 0 ] && c=$(printf '\033[200~%s\033[201~' "$c"); zellij action toggle-floating-panes; zellij action write-chars -- "$c""# { floating true; close_on_exit true; name "backscroll (insert)"; }; }
     }
 }

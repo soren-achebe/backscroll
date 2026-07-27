@@ -58,8 +58,9 @@ convention).
 	_$BACKSCROLL_NO_BIND_ to skip the binding) for the given shell, or a
 	picker key-binding snippet for your multiplexer: tmux popup binds
 	for _~/.tmux.conf_, zellij floating-pane keybinds for
-	_~/.config/zellij/config.kdl_, or GNU screen window binds for
-	_~/.screenrc_.
+	_~/.config/zellij/config.kdl_ (including *Alt r*, which types the
+	picked command back at your prompt — any shell, no rc snippet
+	needed), or GNU screen window binds for _~/.screenrc_.
 
 *list* [*-n* _N_] [_filters_]
 	List recent commands. Aliased as *last*.
@@ -145,9 +146,10 @@ convention).
 	Serve a local, read-only web UI for browsing and searching history:
 	search-as-you-type over commands and outputs (with grep-style
 	context lines around matches), ANSI colors rendered, one-click diff
-	against the previous run of the same command, and stats breakdowns
+	against the previous run of the same command, stats breakdowns
 	(by command, directory, exit, host or day) scoped by the active
-	filters. Binds
+	filters, and per-command _#id_ permalinks that open one command
+	full-page. Binds
 	to loopback only by default (_127.0.0.1:4133_) and rejects non-local
 	Host headers (DNS-rebinding guard). *--redact* masks secrets in
 	everything served (colors are lost on redacted output).

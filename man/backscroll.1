@@ -73,8 +73,9 @@ inserts the selected command at the prompt — set
 \fI$BACKSCROLL_NO_BIND\fR to skip the binding) for the given shell, or a
 picker key-binding snippet for your multiplexer: tmux popup binds
 for \fI~/.\&tmux.\&conf\fR, zellij floating-pane keybinds for
-\fI~/.\&config/zellij/config.\&kdl\fR, or GNU screen window binds for
-\fI~/.\&screenrc\fR.\&
+\fI~/.\&config/zellij/config.\&kdl\fR (including \fBAlt r\fR, which types the
+picked command back at your prompt — any shell, no rc snippet
+needed), or GNU screen window binds for \fI~/.\&screenrc\fR.\&
 .P
 .RE
 \fBlist\fR [\fB-n\fR \fIN\fR] [\fIfilters\fR]
@@ -186,9 +187,10 @@ with your client as command \fBbackscroll\fR, args \fBmcp\fR.\&
 Serve a local, read-only web UI for browsing and searching history:
 search-as-you-type over commands and outputs (with grep-style
 context lines around matches), ANSI colors rendered, one-click diff
-against the previous run of the same command, and stats breakdowns
+against the previous run of the same command, stats breakdowns
 (by command, directory, exit, host or day) scoped by the active
-filters.\& Binds
+filters, and per-command \fI#id\fR permalinks that open one command
+full-page.\& Binds
 to loopback only by default (\fI127.\&0.\&0.\&1:4133\fR) and rejects non-local
 Host headers (DNS-rebinding guard).\& \fB--redact\fR masks secrets in
 everything served (colors are lost on redacted output).\&

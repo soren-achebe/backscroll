@@ -36,6 +36,15 @@ main { max-width:1100px; margin:0 auto; padding:12px 16px 60px; }
   cursor:pointer; }
 .rowhead:hover { background:var(--panel2); }
 .id { color:var(--dim); min-width:3.5em; text-align:right; }
+.id a { color:inherit; text-decoration:none; }
+.id a:hover { color:var(--accent); text-decoration:underline; }
+.permbar { padding:10px 2px 2px; font-size:13px; }
+.permbar a { color:var(--accent); text-decoration:none; }
+.permbar a:hover { text-decoration:underline; }
+.perm .rowhead { cursor:default; }
+.perm .rowhead:hover { background:inherit; }
+.perm .cmd { white-space:pre-wrap; overflow-wrap:anywhere; }
+.perm pre { max-height:none; }
 .cmd { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .meta { color:var(--dim); font-size:12px; white-space:nowrap; }
 .exit-ok { color:var(--ok); } .exit-bad { color:var(--bad); font-weight:700; }
@@ -133,6 +142,7 @@ function kb(n) { return n < 1024 ? n + " B" : n < 1048576 ? (n/1024).toFixed(1) 
 async function refresh() {
   if (ctl) ctl.abort();
   ctl = new AbortController();
+  if (/^#\d+$/.test(location.hash)) history.replaceState(null, "", location.pathname);
   const p = new URLSearchParams();
   for (const id of ["exit","since","host"]) { const v = $("#"+id).value; if (v) p.set(id, v); }
   if (dayFilter) { p.set("since", dayFilter); p.set("until", nextDay(dayFilter)); }
@@ -151,12 +161,9 @@ async function refresh() {
   const cs = d.commands || [];
   if (!cs.length) { list.innerHTML = '<div class="empty">nothing here' + (q.value ? " for “" + esc(q.value) + "”" : "") + '</div>'; return; }
   list.innerHTML = cs.map(c => {
-    const ex = c.exit === null ? '<span class="meta">exit ?</span>'
-      : c.exit === 0 ? '<span class="exit-ok">✓</span>'
-      : '<span class="exit-bad">✗ ' + c.exit + '</span>';
     return '<div class="row" data-id="' + c.id + '">' +
       '<div class="rowhead">' +
-        '<span class="id">' + c.id + '</span>' + ex +
+        '<span class="id"><a class="plink" href="#' + c.id + '" title="permalink to this command">' + c.id + '</a></span>' + exitHTML(c) +
         '<span class="cmd">' + esc(c.cmd) + '</span>' +
         (c.host ? '<span class="host">[' + esc(c.host) + ']</span>' : '') +
         '<span class="meta">' + ago(c.started_at) + (dur(c.dur_ms) ? " · " + dur(c.dur_ms) : "") + '</span>' +
@@ -192,6 +199,53 @@ async function refreshStats(view, p) {
       (d.distinct > gs.length ? ' · top ' + gs.length + ' shown' : '') + '</div>';
 }
 
+function bodyHTML(d, perm) {
+  const m = d.meta;
+  return '<div class="toolbar">' +
+      '<span>' + esc(m.cwd || "") + '</span>' +
+      '<span>' + kb(m.bytes) + (m.truncated ? ' <span class="trunc">(truncated)</span>' : '') + '</span>' +
+      (perm && m.started_at ? '<span>' + new Date(m.started_at).toLocaleString() + '</span>' : '') +
+      '<span style="flex:1"></span>' +
+      '<button class="copy">copy command</button>' +
+      (perm ? '<button class="plcopy">copy link</button>' : '<button class="open1">open ↗</button>') +
+      '<button class="diff">diff vs previous run</button>' +
+    '</div><pre>' + (d.html || '<span class="di">(no output)</span>') + '</pre>';
+}
+
+function wireBody(body, d, id) {
+  body.dataset.loaded = "1";
+  body.dataset.cmd = d.meta.cmd;
+  body.querySelector(".copy").onclick = ev => {
+    ev.stopPropagation();
+    navigator.clipboard.writeText(body.dataset.cmd);
+    ev.target.textContent = "copied ✓"; setTimeout(() => ev.target.textContent = "copy command", 1200);
+  };
+  const one = body.querySelector(".open1");
+  if (one) one.onclick = ev => { ev.stopPropagation(); location.hash = String(id); };
+  const pl = body.querySelector(".plcopy");
+  if (pl) pl.onclick = ev => {
+    ev.stopPropagation();
+    navigator.clipboard.writeText(location.origin + location.pathname + "#" + id);
+    ev.target.textContent = "copied ✓"; setTimeout(() => ev.target.textContent = "copy link", 1200);
+  };
+  body.querySelector(".diff").onclick = async ev => {
+    ev.stopPropagation();
+    const dd = await (await fetch("/api/diff/" + id)).json();
+    const pre = body.querySelector("pre");
+    if (!dd.prev) { ev.target.textContent = "no previous run"; ev.target.disabled = true; return; }
+    if (body.dataset.diff === "1") {
+      pre.innerHTML = body.dataset.plain; body.dataset.diff = "0";
+      ev.target.textContent = "diff vs previous run"; return;
+    }
+    body.dataset.plain = pre.innerHTML;
+    pre.innerHTML = dd.same
+      ? '<span class="di">output identical to run #' + dd.prev.id + ' (' + ago(dd.prev.started_at) + ')</span>'
+      : dd.html;
+    body.dataset.diff = "1";
+    ev.target.textContent = "show output";
+  };
+}
+
 async function toggle(row) {
   const body = row.querySelector(".body");
   if (body.classList.contains("open")) { body.classList.remove("open"); return; }
@@ -199,41 +253,57 @@ async function toggle(row) {
     body.innerHTML = '<div class="toolbar">loading…</div>';
     body.classList.add("open");
     const d = await (await fetch("/api/cmd/" + row.dataset.id)).json();
-    const m = d.meta;
-    body.innerHTML =
-      '<div class="toolbar">' +
-        '<span>' + esc(m.cwd || "") + '</span>' +
-        '<span>' + kb(m.bytes) + (m.truncated ? ' <span class="trunc">(truncated)</span>' : '') + '</span>' +
-        '<span style="flex:1"></span>' +
-        '<button class="copy">copy command</button>' +
-        '<button class="diff">diff vs previous run</button>' +
-      '</div><pre>' + (d.html || '<span class="di">(no output)</span>') + '</pre>';
-    body.dataset.loaded = "1";
-    body.dataset.cmd = m.cmd;
-    body.querySelector(".copy").onclick = ev => {
-      ev.stopPropagation();
-      navigator.clipboard.writeText(body.dataset.cmd);
-      ev.target.textContent = "copied ✓"; setTimeout(() => ev.target.textContent = "copy command", 1200);
-    };
-    body.querySelector(".diff").onclick = async ev => {
-      ev.stopPropagation();
-      const dd = await (await fetch("/api/diff/" + row.dataset.id)).json();
-      const pre = body.querySelector("pre");
-      if (!dd.prev) { ev.target.textContent = "no previous run"; ev.target.disabled = true; return; }
-      if (body.dataset.diff === "1") {
-        pre.innerHTML = body.dataset.plain; body.dataset.diff = "0";
-        ev.target.textContent = "diff vs previous run"; return;
-      }
-      body.dataset.plain = pre.innerHTML;
-      pre.innerHTML = dd.same
-        ? '<span class="di">output identical to run #' + dd.prev.id + ' (' + ago(dd.prev.started_at) + ')</span>'
-        : dd.html;
-      body.dataset.diff = "1";
-      ev.target.textContent = "show output";
-    };
+    body.innerHTML = bodyHTML(d, false);
+    wireBody(body, d, row.dataset.id);
   }
   body.classList.add("open");
 }
+
+function exitHTML(c) {
+  return c.exit === null ? '<span class="meta">exit ?</span>'
+    : c.exit === 0 ? '<span class="exit-ok">✓</span>'
+    : '<span class="exit-bad">✗ ' + c.exit + '</span>';
+}
+
+function wireBack() {
+  list.querySelector(".back").onclick = e => {
+    e.preventDefault();
+    history.replaceState(null, "", location.pathname);
+    refresh();
+  };
+}
+
+// permView renders a single command full-page — the #<id> deep link.
+async function permView(id) {
+  const back = '<div class="permbar"><a href="#" class="back">← all history</a></div>';
+  let r;
+  try { r = await fetch("/api/cmd/" + id); }
+  catch (e) { list.innerHTML = '<div class="empty">server gone — restart <b>backscroll serve</b></div>'; return; }
+  if (!r.ok) {
+    list.innerHTML = back + '<div class="empty">command #' + esc(String(id)) + ' not found</div>';
+    wireBack(); return;
+  }
+  const d = await r.json();
+  const m = d.meta;
+  list.innerHTML = back +
+    '<div class="row perm" data-id="' + m.id + '">' +
+      '<div class="rowhead">' +
+        '<span class="id">' + m.id + '</span>' + exitHTML(m) +
+        '<span class="cmd">' + esc(m.cmd) + '</span>' +
+        (m.host ? '<span class="host">[' + esc(m.host) + ']</span>' : '') +
+        '<span class="meta">' + ago(m.started_at) + (dur(m.dur_ms) ? " · " + dur(m.dur_ms) : "") + '</span>' +
+      '</div><div class="body open"></div></div>';
+  const body = list.querySelector(".body");
+  body.innerHTML = bodyHTML(d, true);
+  wireBody(body, d, m.id);
+  wireBack();
+}
+
+function route() {
+  const h = location.hash.match(/^#(\d+)$/);
+  if (h) permView(h[1]); else refresh();
+}
+window.addEventListener("hashchange", route);
 
 function setCwd(v) {
   cwdFilter = v;
@@ -291,10 +361,11 @@ function applyStatFilter(dim, raw) {
 }
 
 list.addEventListener("click", e => {
+  if (e.target.closest("a.plink")) return; // hash navigation → route()
   const tr = e.target.closest("tr.clk");
   if (tr) { applyStatFilter(tr.dataset.dim, tr.dataset.raw); return; }
   const head = e.target.closest(".rowhead");
-  if (head) toggle(head.closest(".row"));
+  if (head && !head.closest(".perm")) toggle(head.closest(".row"));
 });
 q.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(refresh, 150); });
 $("#since").addEventListener("change", () => {
@@ -313,7 +384,7 @@ document.addEventListener("keydown", e => {
     $("#stats").textContent = s.commands + " commands · " + s.sessions + " sessions · " + kb(s.db_bytes) + " · v" + s.version;
     if (s.redacting) $("#redacting").style.display = "inline";
   } catch (e) {}
-  refresh();
+  route();
 })();
 </script>
 </body>

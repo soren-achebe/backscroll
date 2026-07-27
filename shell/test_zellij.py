@@ -8,6 +8,8 @@ Drives a real zellij session in a PTY and asserts:
     recorded history; fzf narrows; Enter pages the stored output; q closes
     the pane (close_on_exit) and focus returns to the shell
   - Alt Shift b shows only failed commands
+  - Alt r picks a command and TYPES it at the underlying prompt
+    (write-chars insert — editable, not executed; esc cancels cleanly)
   - zellij's own default binds (Alt n) still work — merge, not clobber
   - `backscroll run` records correctly *inside* a zellij pane
 
@@ -190,6 +192,60 @@ def test_floating_pick(env):
         z.close(force=True)
 
 
+def test_insert_pick(env):
+    """Alt r: pick a command and type it at the prompt (insert, don't run)."""
+    z = pexpect.spawn(
+        os.path.join(HOME, "bin", "zellij"),
+        ["--session", "bkszj3"],
+        env=env,
+        dimensions=(32, 110),
+        encoding="utf-8",
+        timeout=20,
+    )
+    try:
+        time.sleep(4)
+        z.send("\x1br")  # Alt r
+        wait_dump(env, "bkszj3", "esc: cancel")
+        layout = zellij_action(env, "bkszj3", "dump-layout").stdout
+        check(
+            "Alt r opens floating insert-pick",
+            'name="backscroll (insert)"' in layout,
+        )
+
+        z.send("\x1b")  # esc: cancel
+        time.sleep(2)
+        z.send("echo cancel-ok\r")
+        s = wait_dump(env, "bkszj3", "cancel-ok")
+        check("Alt r esc cancels cleanly (pane closed, nothing typed)",
+              "cancel-ok" in s and "backscroll>" not in s)
+
+        z.send("\x1br")
+        wait_dump(env, "bkszj3", "esc: cancel")
+        z.send("beta")  # narrow to the printf command
+        wait_dump(env, "bkszj3", "1/")
+        z.send("\r")
+        time.sleep(2.5)
+        s = dump(env, "bkszj3")
+        check(
+            "Alt r types the picked command at the prompt",
+            "printf 'multi\\nline\\noutput-beta\\n'" in s,
+        )
+        # inserted, NOT executed: the literal output lines must not appear
+        check(
+            "picked command was inserted, not run",
+            "\nmulti\n" not in s and "\noutput-beta\n" not in s,
+        )
+        # it is really sitting in the line editor: add to it and run
+        z.send(" && echo appended-delta\r")
+        s = wait_dump(env, "bkszj3", "appended-delta")
+        check(
+            "inserted line is editable and runs on Enter",
+            "output-beta" in s and "appended-delta" in s,
+        )
+    finally:
+        z.close(force=True)
+
+
 def test_record_inside_zellij(env):
     z = pexpect.spawn(
         os.path.join(HOME, "bin", "zellij"),
@@ -230,6 +286,7 @@ def main():
     try:
         record_history(env)
         test_floating_pick(env)
+        test_insert_pick(env)
         test_record_inside_zellij(env)
     finally:
         subprocess.run(

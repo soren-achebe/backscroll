@@ -255,9 +255,13 @@ just decide which side of tmux you want it on:
 - **zellij:** same story — record inside each pane, and
   `backscroll init zellij` prints a keybinds snippet that puts the same
   fuzzy search in a floating pane on `Alt b` (`Alt Shift b` = failures
-  only). Append it to `~/.config/zellij/config.kdl` if you have no
-  `keybinds` block yet; otherwise copy the two `bind` lines into your
-  existing one (zellij ignores a second `keybinds` block).
+  only), plus `Alt r` to pick a past command and **type it at your
+  prompt** — inserted for editing, not executed (multiline commands
+  arrive via bracketed paste, so embedded newlines don't press Enter).
+  Works with any shell, no rc snippet needed. Append the snippet to
+  `~/.config/zellij/config.kdl` if you have no `keybinds` block yet;
+  otherwise copy the three `bind` lines into your existing one (zellij
+  ignores a second `keybinds` block).
 - **GNU screen:** record inside each window, and
   `backscroll init screen >> ~/.screenrc` binds `C-a B` to the same
   fuzzy search in a throwaway window (`C-a F` = failures only) that
@@ -362,6 +366,10 @@ history:
   Progress-bar spam (`\r` overwrites) collapses to its final state.
 - **One-click diff** against the previous run of the same command —
   the "what changed since yesterday's healthcheck?" button.
+- **Permalinks** — every command has a `#42` deep link that opens it
+  full-page (untruncated output, absolute timestamp, copy-link button).
+  Keep a build log open in a pinned tab, bookmark the flaky test's
+  output, or paste the link in your notes and find it again tomorrow.
 - **Local-only by design**: binds to `127.0.0.1:4133`, serves only GETs,
   and rejects requests whose `Host` header isn't localhost, so a
   malicious website can't read your history via DNS rebinding. If you
