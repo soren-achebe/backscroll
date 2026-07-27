@@ -248,6 +248,21 @@ func TestMCPSearchListGet(t *testing.T) {
 		t.Errorf("list fail should exclude exit-0 commands: %q", text)
 	}
 
+	// until: an old exclusive window excludes everything; a future bound
+	// keeps it all; a bad spec is a tool error
+	text, isErr = h.toolText("list_commands", map[string]any{"until": "2001-01-01"})
+	if isErr || !strings.Contains(text, "no recorded commands matched") {
+		t.Errorf("list until old: %v %q", isErr, text)
+	}
+	text, isErr = h.toolText("list_commands", map[string]any{"since": "1w", "until": "1s"})
+	if isErr || !strings.Contains(text, "4 command(s)") {
+		t.Errorf("list since/until window: %v %q", isErr, text)
+	}
+	_, isErr = h.toolText("list_commands", map[string]any{"until": "bogus"})
+	if !isErr {
+		t.Error("bad until should be a tool error")
+	}
+
 	// id -1 = most recent; its output holds a token that must be redacted
 	// when redaction is on (separate test) but visible here (redact off).
 	text, isErr = h.toolText("get_output", map[string]any{"id": -1})

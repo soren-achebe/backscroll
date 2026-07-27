@@ -59,7 +59,7 @@ if (( $+functions[compdef] )); then
       elif [[ $words[CURRENT-1] == -o ]]; then
         _files
       elif [[ $words[CURRENT] == -* ]]; then
-        compadd -- --format --details --raw --redact -o -n --session --cwd --exit --since --host
+        compadd -- --format --details --raw --redact -o -n --session --cwd --exit --since --until --host
       fi
     elif [[ $words[2] == sync && CURRENT == 3 ]]; then
       compadd init export import status
@@ -73,7 +73,7 @@ if (( $+functions[compdef] )); then
       elif [[ $words[CURRENT-1] == (--cwd|-cwd) ]]; then
         _files -/
       elif [[ $words[CURRENT] == -* ]]; then
-        local -a _bs_flags=(-n --session --cwd --exit --since --host)
+        local -a _bs_flags=(-n --session --cwd --exit --since --until --host)
         [[ $words[2] == pick ]] && _bs_flags+=(--pager --raw --print-id --print-cmd --redact)
         [[ $words[2] == search ]] && _bs_flags+=(-A -B -C --redact)
         [[ $words[2] == stats ]] && _bs_flags+=(--by)

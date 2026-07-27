@@ -53,6 +53,7 @@ complete -c backscroll -n "__fish_seen_subcommand_from list last search pick exp
 complete -c backscroll -n "__fish_seen_subcommand_from list last search pick export stats" -l cwd -d "only this dir (or beneath)" -r -a "(__fish_complete_directories)"
 complete -c backscroll -n "__fish_seen_subcommand_from list last search pick export stats" -l exit -d "only this exit code" -x -a "fail 0 1 2"
 complete -c backscroll -n "__fish_seen_subcommand_from list last search pick export stats" -l since -d "only newer than (2h, 3d, 1w, date)" -x
+complete -c backscroll -n "__fish_seen_subcommand_from list last search pick export stats" -l until -d "only older than (exclusive; 2h, 3d, 1w, date)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from list last search pick export stats" -l host -d "only this synced host (local = this machine)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from search" -s C -d "context lines around matches (grep -C)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from search" -s A -d "lines after matches (grep -A)" -x

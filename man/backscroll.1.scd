@@ -177,6 +177,11 @@ convention).
 *--since* _30m_|_2h_|_3d_|_1w_|_YYYY-MM-DD[ HH:MM]_
 	Only commands newer than the given age or date (local time).
 
+*--until* _30m_|_2h_|_3d_|_1w_|_YYYY-MM-DD[ HH:MM]_
+	Only commands older than the given age or date (exclusive bound,
+	local time). Combine with *--since* to select a window:
+	*--since 2026-07-26 --until 2026-07-27* is exactly that day.
+
 *--session* _ID_
 	Only commands from the given recording session.
 

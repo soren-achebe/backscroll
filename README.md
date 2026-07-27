@@ -202,6 +202,7 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 | **Ctrl-X Ctrl-P** at the prompt | pick a past command and insert it at your cursor (current line becomes the query) |
 | `backscroll list -n 50` | recent commands with exit/duration/size |
 | `... --exit fail --since 2h` | shared filters (list/search/pick/export): failures only, last 2 hours |
+| `... --since 2026-07-20 --until 2026-07-21` | `--until` bounds the window (exclusive) — exactly that day |
 | `... --cwd .` | only commands run in this directory (or beneath it) |
 | `backscroll diff 3141` | what changed vs. the **previous run of the same command** |
 | `backscroll diff -2 -1` | unified diff of any two stored outputs (`-U n` context) |

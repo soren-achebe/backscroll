@@ -246,6 +246,9 @@ func TestListFilters(t *testing.T) {
 	want("exit=2", Filter{Exit: 2, ExitSet: true}, 1)
 	want("exit=0", Filter{ExitSet: true}, 4, 2)
 	want("since", Filter{Since: time.Now().Add(-time.Hour)}, 4, 3, 2)
+	want("until", Filter{Until: time.Now().Add(-time.Hour)}, 1)
+	want("window", Filter{Since: old.Add(-time.Hour), Until: old.Add(time.Hour)}, 1)
+	want("window-recent", Filter{Since: time.Now().Add(-time.Hour), Until: time.Now().Add(time.Minute)}, 4, 3, 2)
 	want("combo", Filter{Cwd: "/src/app", Failed: true}, 1)
 	want("limit", Filter{Limit: 2}, 4, 3)
 

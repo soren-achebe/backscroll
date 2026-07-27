@@ -320,14 +320,20 @@ func TestServeStatsBreakdown(t *testing.T) {
 func TestServeStatsRawKeys(t *testing.T) {
 	_, h := newTestServer(t, false)
 
-	// cmd + day dims are not filterable — no raw key on any row
-	for _, dim := range []string{"cmd", "day"} {
-		_, body := get(t, h, "/api/stats?by="+dim)
-		for _, g := range body["groups"].([]any) {
-			if _, ok := g.(map[string]any)["raw"]; ok {
-				t.Fatalf("by=%s row unexpectedly has raw: %v", dim, g)
-			}
+	// cmd dim is not filterable — no raw key on any row
+	_, cmdBody := get(t, h, "/api/stats?by=cmd")
+	for _, g := range cmdBody["groups"].([]any) {
+		if _, ok := g.(map[string]any)["raw"]; ok {
+			t.Fatalf("by=cmd row unexpectedly has raw: %v", g)
 		}
+	}
+
+	// day rows carry the date as raw so the UI can build a since/until window
+	_, dayBody := get(t, h, "/api/stats?by=day")
+	dayGroups := dayBody["groups"].([]any)
+	dayRaw, _ := dayGroups[0].(map[string]any)["raw"].(string)
+	if _, err := time.Parse("2006-01-02", dayRaw); err != nil {
+		t.Fatalf("day raw key: got %q, want a date", dayRaw)
 	}
 
 	// exit/cwd/host rows carry the raw key that /api/commands accepts
@@ -355,6 +361,21 @@ func TestServeStatsRawKeys(t *testing.T) {
 	if cs := body["commands"].([]any); len(cs) != 1 {
 		t.Fatalf("exit=1 round trip: %v", cs)
 	}
+
+	// day round trip: since=<day>&until=<day+1> selects everything (all
+	// seed rows are recent), and an old window selects nothing
+	_, dayBody = get(t, h, "/api/stats?by=day")
+	day := dayBody["groups"].([]any)[0].(map[string]any)["raw"].(string)
+	next := time.Now().AddDate(0, 0, 2).Format("2006-01-02")
+	_, body = get(t, h, "/api/commands?since="+day+"&until="+next)
+	all := len(body["commands"].([]any))
+	if all == 0 {
+		t.Fatalf("day window round trip: no commands")
+	}
+	_, body = get(t, h, "/api/commands?since=2001-01-01&until=2001-01-02")
+	if cs, ok := body["commands"].([]any); ok && len(cs) != 0 {
+		t.Fatalf("old window: want none, got %v", cs)
+	}
 }
 
 func TestStatRawKey(t *testing.T) {
@@ -363,6 +384,12 @@ func TestStatRawKey(t *testing.T) {
 	}
 	if got := statRawKey("cmd", "git", false, nil); got != "" {
 		t.Fatalf("cmd dim must not be filterable, got %q", got)
+	}
+	if got := statRawKey("day", "2026-07-26", false, nil); got != "2026-07-26" {
+		t.Fatalf("day date should be filterable, got %q", got)
+	}
+	if got := statRawKey("day", "unknown", false, nil); got != "" {
+		t.Fatalf("'unknown' day must not be filterable, got %q", got)
 	}
 	if got := statRawKey("cwd", "/tmp", true, nil); got != "/tmp" {
 		t.Fatalf("unredacted cwd should pass through, got %q", got)

@@ -199,6 +199,8 @@ var mcpTools = []map[string]any{
 					"description": "only this exit code (a number), or 'fail' for any nonzero"},
 				"since": map[string]any{"type": "string",
 					"description": "only commands newer than this: 30m, 2h, 3d, 1w, or 2006-01-02[ 15:04]"},
+				"until": map[string]any{"type": "string",
+					"description": "only commands older than this (exclusive; same forms as since). Combine with since to bound a time window, e.g. one day."},
 				"host": map[string]any{"type": "string",
 					"description": "only commands from this synced machine ('local' = this machine)"},
 				"limit": map[string]any{"type": "integer",
@@ -229,6 +231,7 @@ var mcpTools = []map[string]any{
 				"cwd":   map[string]any{"type": "string", "description": "only commands run in this directory or beneath it"},
 				"exit":  map[string]any{"type": "string", "description": "only this exit code (a number), or 'fail' for any nonzero"},
 				"since": map[string]any{"type": "string", "description": "only commands newer than this: 30m, 2h, 3d, 1w, or a date"},
+				"until": map[string]any{"type": "string", "description": "only commands older than this (exclusive; same forms as since)"},
 				"host":  map[string]any{"type": "string", "description": "only commands from this synced machine ('local' = this machine)"},
 				"limit": map[string]any{"type": "integer", "description": "max results (default 20, max 100)"},
 			},
@@ -323,6 +326,7 @@ type mcpFilterArgs struct {
 	Cwd   string `json:"cwd"`
 	Exit  string `json:"exit"`
 	Since string `json:"since"`
+	Until string `json:"until"`
 	Host  string `json:"host"`
 	Limit int    `json:"limit"`
 }
@@ -354,11 +358,18 @@ func (a mcpFilterArgs) filter() (store.Filter, error) {
 		f.Exit, f.ExitSet = n, true
 	}
 	if a.Since != "" {
-		t, err := parseSince(a.Since)
+		t, err := parseTimeSpec(a.Since)
 		if err != nil {
-			return f, err
+			return f, fmt.Errorf("since: %w", err)
 		}
 		f.Since = t
+	}
+	if a.Until != "" {
+		t, err := parseTimeSpec(a.Until)
+		if err != nil {
+			return f, fmt.Errorf("until: %w", err)
+		}
+		f.Until = t
 	}
 	return f, nil
 }

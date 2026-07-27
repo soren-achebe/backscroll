@@ -231,6 +231,13 @@ Only commands with the given exit code, or any non-zero exit.\&
 Only commands newer than the given age or date (local time).\&
 .P
 .RE
+\fB--until\fR \fI30m\fR|\fI2h\fR|\fI3d\fR|\fI1w\fR|\fIYYYY-MM-DD[ HH:MM]\fR
+.RS 4
+Only commands older than the given age or date (exclusive bound,
+local time).\& Combine with \fB--since\fR to select a window:
+\fB--since 2026-07-26 --until 2026-07-27\fR is exactly that day.\&
+.P
+.RE
 \fB--session\fR \fIID\fR
 .RS 4
 Only commands from the given recording session.\&

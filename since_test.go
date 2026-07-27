@@ -24,17 +24,17 @@ func TestParseSince(t *testing.T) {
 		{"1w", 7 * 24 * time.Hour},
 	}
 	for _, c := range cases {
-		got, err := parseSince(c.in)
+		got, err := parseTimeSpec(c.in)
 		if err != nil {
-			t.Errorf("parseSince(%q): %v", c.in, err)
+			t.Errorf("parseTimeSpec(%q): %v", c.in, err)
 			continue
 		}
 		if !approx(got, c.ago) {
-			t.Errorf("parseSince(%q) = %v, want ~%v ago", c.in, got, c.ago)
+			t.Errorf("parseTimeSpec(%q) = %v, want ~%v ago", c.in, got, c.ago)
 		}
 	}
 
-	got, err := parseSince("2026-07-01")
+	got, err := parseTimeSpec("2026-07-01")
 	if err != nil {
 		t.Fatalf("date: %v", err)
 	}
@@ -42,7 +42,7 @@ func TestParseSince(t *testing.T) {
 	if !got.Equal(want) {
 		t.Errorf("date: got %v want %v", got, want)
 	}
-	got, err = parseSince("2026-07-01 13:45")
+	got, err = parseTimeSpec("2026-07-01 13:45")
 	if err != nil {
 		t.Fatalf("datetime: %v", err)
 	}
@@ -52,8 +52,8 @@ func TestParseSince(t *testing.T) {
 	}
 
 	for _, bad := range []string{"", "yesterday", "5x", "d", "2026-13-40"} {
-		if _, err := parseSince(bad); err == nil {
-			t.Errorf("parseSince(%q): expected error", bad)
+		if _, err := parseTimeSpec(bad); err == nil {
+			t.Errorf("parseTimeSpec(%q): expected error", bad)
 		}
 	}
 }

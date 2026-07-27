@@ -26,8 +26,9 @@ func cmdPick(args []string) error {
 	printCmd := fs.Bool("print-cmd", false, "print only the selected command line")
 	doRedact := fs.Bool("redact", false, "mask secrets (tokens, keys, passwords) in the output")
 	mkFilter := filterFlags(fs)
-	fs.Parse(args)
-	initial := strings.Join(fs.Args(), " ")
+	flagArgs, posArgs := splitFlags(fs, args)
+	fs.Parse(flagArgs)
+	initial := strings.Join(posArgs, " ")
 
 	fzf, err := exec.LookPath("fzf")
 	if err != nil {

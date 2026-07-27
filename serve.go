@@ -195,8 +195,13 @@ func filterFromQuery(q url.Values) store.Filter {
 		}
 	}
 	if v := q.Get("since"); v != "" {
-		if t, err := parseSince(v); err == nil {
+		if t, err := parseTimeSpec(v); err == nil {
 			f.Since = t
+		}
+	}
+	if v := q.Get("until"); v != "" {
+		if t, err := parseTimeSpec(v); err == nil {
+			f.Until = t
 		}
 	}
 	return f
@@ -399,6 +404,10 @@ func statRawKey(dim, key string, redacting bool, extra []*regexp.Regexp) string 
 	case "exit":
 		if _, err := strconv.ParseInt(key, 10, 64); err != nil {
 			return "" // "?" — no exit recorded, not expressible as exit=N
+		}
+	case "day", "date":
+		if _, err := time.ParseInLocation("2006-01-02", key, time.Local); err != nil {
+			return "" // "unknown" — no start time recorded
 		}
 	default:
 		return ""

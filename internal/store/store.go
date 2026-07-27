@@ -467,6 +467,7 @@ type Filter struct {
 	ExitSet bool      // Exit is meaningful (allows filtering on 0)
 	Failed  bool      // only nonzero exit codes
 	Since   time.Time // non-zero: only commands started at/after this time
+	Until   time.Time // non-zero: only commands started strictly before this time
 	Host    string    // non-empty: only this origin host; "local" = this machine
 	Limit   int       // <=0: default 20
 }
@@ -494,6 +495,10 @@ func (f Filter) where(tbl string) (string, []any) {
 		conds = append(conds, tbl+`started_at>=?`)
 		args = append(args, f.Since.UnixMilli())
 	}
+	if !f.Until.IsZero() {
+		conds = append(conds, tbl+`started_at<?`)
+		args = append(args, f.Until.UnixMilli())
+	}
 	if f.Host != "" {
 		if f.Host == "local" {
 			conds = append(conds, tbl+`machine IS NULL`)
@@ -516,7 +521,7 @@ func likeEscape(s string) string {
 // Active reports whether any narrowing filter is set (Limit alone is not a
 // filter).
 func (f Filter) Active() bool {
-	return f.Session > 0 || f.Cwd != "" || f.ExitSet || f.Failed || !f.Since.IsZero() || f.Host != ""
+	return f.Session > 0 || f.Cwd != "" || f.ExitSet || f.Failed || !f.Since.IsZero() || !f.Until.IsZero() || f.Host != ""
 }
 
 func (f Filter) limit() int {

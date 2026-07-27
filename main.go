@@ -264,6 +264,7 @@ func filterFlags(fs *flag.FlagSet) func(limit int) (store.Filter, error) {
 	cwd := fs.String("cwd", "", "only commands run in `dir` (or beneath it); \".\" = current dir")
 	exit := fs.String("exit", "", "only exit `code` (number, or \"fail\" for any nonzero)")
 	since := fs.String("since", "", "only commands newer than `t` (30m, 2h, 3d, 1w, or 2006-01-02[ 15:04])")
+	until := fs.String("until", "", "only commands older than `t` (same forms as --since; exclusive bound)")
 	host := fs.String("host", "", "only commands from this `host` (synced machines; \"local\" = this machine)")
 	return func(limit int) (store.Filter, error) {
 		f := store.Filter{Session: *sess, Limit: limit, Host: *host}
@@ -286,19 +287,62 @@ func filterFlags(fs *flag.FlagSet) func(limit int) (store.Filter, error) {
 			f.Exit, f.ExitSet = n, true
 		}
 		if *since != "" {
-			t, err := parseSince(*since)
+			t, err := parseTimeSpec(*since)
 			if err != nil {
-				return f, err
+				return f, fmt.Errorf("--since: %w", err)
 			}
 			f.Since = t
+		}
+		if *until != "" {
+			t, err := parseTimeSpec(*until)
+			if err != nil {
+				return f, fmt.Errorf("--until: %w", err)
+			}
+			f.Until = t
 		}
 		return f, nil
 	}
 }
 
-// parseSince accepts a relative age (30m, 2h, 3d, 1w — d/w extend Go
+// splitFlags separates registered flags (with their values) from positional
+// words so filters can trail the query: `search boom --since 1d` works the
+// same as `search --since 1d boom`. A dash-word that is not a registered
+// flag stays positional (queries may contain dashes); everything after a
+// bare "--" is positional.
+func splitFlags(fs *flag.FlagSet, args []string) (flags, pos []string) {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			pos = append(pos, args[i+1:]...)
+			break
+		}
+		if strings.HasPrefix(a, "-") && a != "-" {
+			name := strings.TrimLeft(a, "-")
+			if eq := strings.IndexByte(name, '='); eq >= 0 {
+				name = name[:eq]
+			}
+			if fl := fs.Lookup(name); fl != nil {
+				flags = append(flags, a)
+				if !strings.Contains(a, "=") {
+					b, ok := fl.Value.(interface{ IsBoolFlag() bool })
+					if !(ok && b.IsBoolFlag()) && i+1 < len(args) {
+						i++
+						flags = append(flags, args[i])
+					}
+				}
+				continue
+			}
+		}
+		pos = append(pos, a)
+	}
+	return flags, pos
+}
+
+// parseTimeSpec accepts a relative age (30m, 2h, 3d, 1w — d/w extend Go
 // durations) or an absolute local date/time (2006-01-02, 2006-01-02 15:04).
-func parseSince(s string) (time.Time, error) {
+// Relative forms mean "that long ago", so --until 2h reads "older than two
+// hours" and --since 2h "newer than two hours".
+func parseTimeSpec(s string) (time.Time, error) {
 	for _, layout := range []string{"2006-01-02 15:04", "2006-01-02T15:04", "2006-01-02"} {
 		if t, err := time.ParseInLocation(layout, s, time.Local); err == nil {
 			return t, nil
@@ -320,7 +364,7 @@ func parseSince(s string) (time.Time, error) {
 	if d, err := time.ParseDuration(ds); err == nil {
 		return time.Now().Add(-d), nil
 	}
-	return time.Time{}, fmt.Errorf("--since: want 30m, 2h, 3d, 1w or 2006-01-02[ 15:04], got %q", s)
+	return time.Time{}, fmt.Errorf("want 30m, 2h, 3d, 1w or 2006-01-02[ 15:04], got %q", s)
 }
 
 func cmdList(args []string) error {
@@ -471,11 +515,12 @@ func cmdSearch(args []string) error {
 	ctxA := fs.Int("A", -1, "show N lines after each matching output line (like grep -A)")
 	ctxB := fs.Int("B", -1, "show N lines before each matching output line (like grep -B)")
 	mkFilter := filterFlags(fs)
-	fs.Parse(args)
-	if fs.NArg() == 0 {
-		return fmt.Errorf("usage: backscroll search [flags] <query>")
+	flagArgs, posArgs := splitFlags(fs, args)
+	fs.Parse(flagArgs)
+	if len(posArgs) == 0 {
+		return fmt.Errorf("usage: backscroll search <query> [flags]")
 	}
-	query := strings.Join(fs.Args(), " ")
+	query := strings.Join(posArgs, " ")
 	// trigram tokenizer: quote the query so users can type natural strings
 	q := `"` + strings.ReplaceAll(query, `"`, `""`) + `"`
 	st, err := openStore()

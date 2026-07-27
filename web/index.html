@@ -56,7 +56,7 @@ table.stats td.key { overflow-wrap:anywhere; }
 table.stats .bar { color:var(--c6); letter-spacing:-1px; }
 table.stats tr.clk { cursor:pointer; }
 table.stats tr.clk:hover td { background:var(--row-hover, rgba(255,255,255,.04)); }
-#cwdchip { display:none; align-items:center; gap:4px; font-size:12px; color:var(--c6);
+#cwdchip, #daychip { display:none; align-items:center; gap:4px; font-size:12px; color:var(--c6);
   border:1px solid var(--border); border-radius:10px; padding:1px 8px; cursor:pointer;
   max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .statnote { color:var(--dim); font-size:12px; text-align:center; padding:12px 0; }
@@ -99,6 +99,7 @@ kbd { background:var(--panel2); border:1px solid var(--border); border-radius:4p
   <select id="since"><option value="">any time</option><option value="1h">last hour</option><option value="1d">last day</option><option value="1w">last week</option></select>
   <select id="host" style="display:none"><option value="">all hosts</option></select>
   <span id="cwdchip" title="click to clear this filter"></span>
+  <span id="daychip" title="click to clear this filter"></span>
   <select id="view"><option value="">history</option><option value="cmd">by command</option><option value="cwd">by directory</option><option value="exit">by exit</option><option value="host">by host</option><option value="day">by day</option></select>
   <span id="redacting">redacting</span>
   <span id="stats"></span>
@@ -108,7 +109,7 @@ kbd { background:var(--panel2); border:1px solid var(--border); border-radius:4p
 "use strict";
 const $ = s => document.querySelector(s);
 const list = $("#list"), q = $("#q");
-let timer = null, ctl = null, cwdFilter = "";
+let timer = null, ctl = null, cwdFilter = "", dayFilter = "";
 
 function ago(ms) {
   if (!ms) return "?";
@@ -134,6 +135,7 @@ async function refresh() {
   ctl = new AbortController();
   const p = new URLSearchParams();
   for (const id of ["exit","since","host"]) { const v = $("#"+id).value; if (v) p.set(id, v); }
+  if (dayFilter) { p.set("since", dayFilter); p.set("until", nextDay(dayFilter)); }
   if (cwdFilter) p.set("cwd", cwdFilter);
   const view = $("#view").value;
   q.disabled = !!view;
@@ -242,6 +244,25 @@ function setCwd(v) {
 }
 $("#cwdchip").onclick = () => setCwd("");
 
+// nextDay("2026-07-26") -> "2026-07-27"; pure string/local-date math so the
+// server (which grouped days in its own local time) gets plain dates back.
+function nextDay(d) {
+  const [y, m, dd] = d.split("-").map(Number);
+  const t = new Date(y, m - 1, dd + 1);
+  return t.getFullYear() + "-" + String(t.getMonth() + 1).padStart(2, "0") +
+    "-" + String(t.getDate()).padStart(2, "0");
+}
+
+function setDay(v) {
+  dayFilter = v;
+  if (v) $("#since").value = "";  // the chip owns the time window now
+  const chip = $("#daychip");
+  chip.style.display = v ? "inline-flex" : "none";
+  chip.textContent = v ? "on " + v + " ✕" : "";
+  refresh();
+}
+$("#daychip").onclick = () => setDay("");
+
 function ensureOpt(sel, val, label) {
   if (![...sel.options].some(o => o.value === val)) {
     const o = document.createElement("option");
@@ -255,6 +276,7 @@ function applyStatFilter(dim, raw) {
   $("#view").value = "";
   q.disabled = false;
   if (dim === "cwd") { setCwd(raw); return; }
+  if (dim === "day") { setDay(raw); return; }
   if (dim === "host") {
     const sel = $("#host");
     ensureOpt(sel, raw, raw);
@@ -275,7 +297,11 @@ list.addEventListener("click", e => {
   if (head) toggle(head.closest(".row"));
 });
 q.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(refresh, 150); });
-for (const id of ["exit","since","host","view","ctx"]) $("#"+id).addEventListener("change", refresh);
+$("#since").addEventListener("change", () => {
+  if (dayFilter && $("#since").value) { setDay(""); return; } // setDay refreshes
+  refresh();
+});
+for (const id of ["exit","host","view","ctx"]) $("#"+id).addEventListener("change", refresh);
 document.addEventListener("keydown", e => {
   if (e.key === "/" && document.activeElement !== q) { e.preventDefault(); q.focus(); q.select(); }
   if (e.key === "Escape" && document.activeElement === q) q.blur();

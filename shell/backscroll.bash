@@ -162,9 +162,9 @@ _backscroll_complete() {
       --exit|-exit) COMPREPLY=($(compgen -W "fail 0 1 2" -- "$cur")) ;;
       --cwd|-cwd)   COMPREPLY=($(compgen -d -- "$cur")) ;;
       -o)           COMPREPLY=($(compgen -f -- "$cur")) ;;
-      --since|-since|--session|-session|--host|-host|-n) ;;
+      --since|-since|--until|-until|--session|-session|--host|-host|-n) ;;
       *) case "$cur" in
-           -*) COMPREPLY=($(compgen -W "--format --details --raw --redact -o -n --session --cwd --exit --since --host" -- "$cur")) ;;
+           -*) COMPREPLY=($(compgen -W "--format --details --raw --redact -o -n --session --cwd --exit --since --until --host" -- "$cur")) ;;
          esac ;;
     esac
   elif [ "${COMP_WORDS[1]}" = "sync" ] && [ "$COMP_CWORD" -eq 2 ]; then
@@ -176,9 +176,9 @@ _backscroll_complete() {
       --by|-by)     COMPREPLY=($(compgen -W "cmd cwd exit host day" -- "$cur")) ;;
       --exit|-exit) COMPREPLY=($(compgen -W "fail 0 1 2" -- "$cur")) ;;
       --cwd|-cwd)   COMPREPLY=($(compgen -d -- "$cur")) ;;
-      --since|-since|--session|-session|--host|-host|-n) ;;
+      --since|-since|--until|-until|--session|-session|--host|-host|-n) ;;
       *) case "$cur" in
-           -*) local _bs_flags="-n --session --cwd --exit --since --host"
+           -*) local _bs_flags="-n --session --cwd --exit --since --until --host"
                [ "${COMP_WORDS[1]}" = "pick" ] && _bs_flags="$_bs_flags --pager --raw --print-id --print-cmd --redact"
                [ "${COMP_WORDS[1]}" = "search" ] && _bs_flags="$_bs_flags -A -B -C --redact"
                [ "${COMP_WORDS[1]}" = "stats" ] && _bs_flags="$_bs_flags --by"
