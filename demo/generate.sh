@@ -53,6 +53,9 @@ EOF
 # fresh state every take
 rm -rf /tmp/demohome/.local /tmp/demohome/.config /tmp/demohome/.hc_state
 
+# fake atuin history for the import + stats finale
+python3 demo/gen-atuin.py /tmp/demohome/.local/share/atuin/history.db
+
 asciinema rec --overwrite --cols 100 --rows 28 \
   -c "python3 demo/driver.py" demo/demo.cast
 agg --theme dracula --font-size 16 --speed 1.0 demo/demo.cast demo/demo.gif

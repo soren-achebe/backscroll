@@ -43,6 +43,10 @@ SCRIPT = [
     ("raw", 0.0, b"x", 2.4),          # -> openssl entry, preview = its output
     ("raw", 0.2, b"\r", 1.1),         # accept -> inserts picked command
     ("raw", 0.4, b"\r", 1.3),         # run it
+    ("say", 0.5, "clear", 0.5),
+    ("say", 0.2, "# day one? import your existing history (atuin/zsh/bash/fish):", 1.0),
+    ("say", 0.2, "backscroll import atuin", 1.8),
+    ("say", 0.5, "backscroll stats --by cmd --since 1w -n 8", 4.6),
     ("say", 0.5, "exit", 0.5),
     ("say", 0.2, "exit", 0.4),
 ]
@@ -74,9 +78,15 @@ def type_text(fd, rng, text):
 
 def main():
     env = dict(os.environ)
+    # XDG vars from the invoking shell would redirect backscroll's DB (and
+    # the seeded atuin db lookup) outside the sandbox HOME — drop them.
+    for k in list(env):
+        if k.startswith("XDG_") or k.startswith("BACKSCROLL_"):
+            del env[k]
     env.update(
         HOME=HOME,
         HOSTNAME="demo",
+        BACKSCROLL_HOST="demo",
         TERM="xterm-256color",
         SHELL="/bin/bash",
         PATH="/tmp/demobin:" + env.get("PATH", ""),
