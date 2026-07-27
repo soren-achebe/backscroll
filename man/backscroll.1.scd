@@ -30,7 +30,8 @@ Add the shell integration to your rc file, then start recorded sessions with
 
 	bash:	echo 'eval "$(backscroll init bash)"' >> ~/.bashrc++
 zsh:	echo 'eval "$(backscroll init zsh)"' >> ~/.zshrc++
-fish:	echo 'backscroll init fish | source' >> ~/.config/fish/config.fish
+fish:	echo 'backscroll init fish | source' >> ~/.config/fish/config.fish++
+pwsh:	Add-Content $PROFILE 'backscroll init pwsh | Out-String | Invoke-Expression'
 
 Run *backscroll doctor* to verify the setup.
 
@@ -51,7 +52,7 @@ convention).
 	shell so that bash reads _~/.bashrc_; pass *--login* for login-shell
 	semantics (note that a login bash does not read _~/.bashrc_).
 
-*init* <*bash*|*zsh*|*fish*|*tmux*|*zellij*|*screen*>
+*init* <*bash*|*zsh*|*fish*|*pwsh*|*tmux*|*zellij*|*screen*>
 	Print the shell-integration snippet (OSC 133 marks, cwd reporting,
 	tab completion, and a *Ctrl-X Ctrl-P* binding that opens *pick* and
 	inserts the selected command at the prompt — set

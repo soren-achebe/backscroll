@@ -91,13 +91,20 @@ brew install soren-achebe/tap/backscroll
 Debian/Ubuntu and Fedora packages (`.deb` / `.rpm`) are attached to each
 [release](https://github.com/soren-achebe/backscroll/releases).
 
+Windows (Scoop):
+
+```powershell
+scoop bucket add backscroll https://github.com/soren-achebe/scoop-bucket
+scoop install backscroll
+```
+
 With Go:
 
 ```sh
 go install github.com/soren-achebe/backscroll@latest
 ```
 
-Or grab a static binary (linux/darwin × amd64/arm64) from
+Or grab a static binary (linux/darwin/windows × amd64/arm64) from
 [releases](https://github.com/soren-achebe/backscroll/releases):
 
 ```sh
@@ -143,6 +150,18 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 > commands longer than 57 bytes), plus exit codes and OSC 7 cwd, with no
 > snippet installed.
 
+> **Windows?** `backscroll run` records PowerShell through a
+> [ConPTY](https://learn.microsoft.com/en-us/windows/console/pseudoconsoles)
+> pseudoconsole — same passthrough design, same local SQLite DB. Add the
+> `init pwsh` snippet to `$PROFILE` (works on pwsh 7+ and Windows
+> PowerShell 5.1) for exact command text, exit codes, and cwd; a shell
+> already carrying VS Code's shell integration is zero-config via its
+> OSC 633 marks. (`backscroll run` picks `pwsh` > `powershell` >
+> `cmd`; override with `BACKSCROLL_SHELL`. cmd.exe has no mark-emitting
+> integration, so sessions run fine but nothing gets segmented —
+> [Clink](https://chrisant996.github.io/clink/) users can emit OSC 133
+> from their prompt filter.)
+
 > **Ghostty, iTerm2, or any plain-OSC 133 terminal?** Also
 > zero-config. These emitters mark prompt/command boundaries but never
 > report the command text — so backscroll **reconstructs it from the
@@ -169,6 +188,11 @@ Release tarballs include a man page (`man/backscroll.1`; source is
    eval "$(backscroll init bash)"
    # ~/.config/fish/config.fish
    backscroll init fish | source
+   ```
+
+   ```powershell
+   # PowerShell (pwsh 7+ anywhere, or Windows PowerShell 5.1) — add to $PROFILE:
+   backscroll init pwsh | Out-String | Invoke-Expression
    ```
 
 2. Start a recorded shell:

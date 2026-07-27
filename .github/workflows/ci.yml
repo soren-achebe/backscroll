@@ -29,6 +29,23 @@ jobs:
       - name: E2E test of the MCP server (stdio JSON-RPC vs real recorded session)
         if: runner.os == 'Linux'
         run: BKS_BIN="$PWD/backscroll" python3 shell/test_mcp.py
+      - name: cache pwsh 7.5.4
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pwsh-7.5.4
+          key: pwsh-7.5.4-${{ runner.os }}
+      - name: E2E test of the PowerShell integration (init pwsh vs real pwsh)
+        if: runner.os == 'Linux'
+        run: |
+          if [ ! -x "$HOME/.cache/pwsh-7.5.4/pwsh" ]; then
+            curl -sL -o /tmp/pwsh.tar.gz https://github.com/PowerShell/PowerShell/releases/download/v7.5.4/powershell-7.5.4-linux-x64.tar.gz
+            echo "1fd7983fe56ca9e6233f126925edb24bf6b6b33e356b69996d925c4db94e2fef  /tmp/pwsh.tar.gz" | sha256sum -c -
+            mkdir -p "$HOME/.cache/pwsh-7.5.4"
+            tar -xzf /tmp/pwsh.tar.gz -C "$HOME/.cache/pwsh-7.5.4"
+            chmod +x "$HOME/.cache/pwsh-7.5.4/pwsh"
+          fi
+          BKS_TEST_BIN="$PWD/backscroll" BKS_TEST_PWSH="$HOME/.cache/pwsh-7.5.4/pwsh"             python3 shell/test_pwsh.py
       - name: cache fish 4.8.1
         if: runner.os == 'Linux'
         uses: actions/cache@v4
@@ -170,6 +187,17 @@ jobs:
           python3 -m pip install --quiet --break-system-packages pexpect \
             || python3 -m pip install --quiet pexpect
           BKS_TEST_BASH=/bin/bash python3 shell/test_bash_integration.py
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+      - run: go vet ./...
+      - name: unit tests + ConPTY E2E (real pwsh under backscroll run)
+        run: go test ./... -count=1 -timeout 15m
 
   compat-matrix:
     # backscroll alongside atuin / starship / zoxide / direnv / oh-my-zsh /

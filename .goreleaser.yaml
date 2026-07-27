@@ -5,7 +5,7 @@ project_name: backscroll
 builds:
   - env:
       - CGO_ENABLED=0
-    goos: [linux, darwin]
+    goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
     ldflags:
       - -s -w -X main.version={{.Version}}
@@ -16,6 +16,9 @@ archives:
     # No version in the name → stable /releases/latest/download/ URLs.
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     files: [LICENSE, README.md, man/backscroll.1]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
 
 checksum:
   name_template: checksums.txt
@@ -33,6 +36,18 @@ nfpms:
     contents:
       - src: man/backscroll.1
         dst: /usr/share/man/man1/backscroll.1
+
+# Windows: `scoop bucket add backscroll https://github.com/soren-achebe/scoop-bucket`
+# then `scoop install backscroll`.
+scoops:
+  - name: backscroll
+    repository:
+      owner: soren-achebe
+      name: scoop-bucket
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/soren-achebe/backscroll
+    description: "Never lose a command's output: per-command searchable terminal history"
+    license: MIT
 
 # macOS-only (Homebrew casks don't exist on Linux); Linux users get
 # deb/rpm/tarball above.
