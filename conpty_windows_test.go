@@ -245,9 +245,12 @@ func TestConPTYRecordsPwsh(t *testing.T) {
 	if !strings.Contains(shown, "hello-conpty") {
 		t.Errorf("show 1 missing output:\n%s", shown)
 	}
-	// cwd must be a normalized Windows path (OSC 7 → winPath).
-	if !strings.Contains(shown, tmp) {
-		t.Errorf("show 1 missing cwd %q:\n%s", tmp, shown)
+	// cwd must be a normalized Windows path (OSC 7 → winPath). Compare
+	// only the unique tail: t.TempDir may hand out an 8.3 short path
+	// (RUNNER~1) while pwsh reports the long form (runneradmin).
+	wantTail := filepath.Base(filepath.Dir(tmp)) + `\` + filepath.Base(tmp)
+	if !strings.Contains(shown, wantTail) {
+		t.Errorf("show 1 missing cwd tail %q:\n%s", wantTail, shown)
 	}
 
 	found := cli("search", "hello-conpty")

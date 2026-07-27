@@ -196,8 +196,6 @@ jobs:
         with:
           go-version: "1.24"
       - run: go vet ./...
-      - name: conpty debug variants (TEMPORARY, branch only)
-        run: go run ./tools/conptydebug
       - name: unit tests + ConPTY E2E (real pwsh under backscroll run)
         run: go test ./... -count=1 -timeout 15m
 
