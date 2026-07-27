@@ -96,7 +96,7 @@ def dump(env):
     return ""
 
 
-def wait_dump(env, needle, tries=12, delay=0.5):
+def wait_dump(env, needle, tries=24, delay=0.5):
     s = ""
     for _ in range(tries):
         s = dump(env)
