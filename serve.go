@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -124,6 +125,7 @@ type cmdJSON struct {
 	Host      string `json:"host,omitempty"` // synced origin; "" = local
 	Session   int64  `json:"session"`
 	Snippet   string `json:"snippet,omitempty"` // HTML with <mark>
+	Ctx       string `json:"ctx,omitempty"`     // HTML context hunks (search + ctx=N)
 }
 
 func (s *webServer) toJSON(c store.Command) cmdJSON {
@@ -171,12 +173,10 @@ func (s *webServer) snippetHTML(snip string) string {
 	return esc
 }
 
-func (s *webServer) commands(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	f := store.Filter{Limit: 50}
-	if n, err := strconv.Atoi(q.Get("n")); err == nil && n > 0 && n <= 500 {
-		f.Limit = n
-	}
+// filterFromQuery builds the shared store.Filter from URL query params
+// (session/cwd/host/exit/since). Limit is left for the caller to set.
+func filterFromQuery(q url.Values) store.Filter {
+	var f store.Filter
 	if v := q.Get("session"); v != "" {
 		f.Session, _ = strconv.ParseInt(v, 10, 64)
 	}
@@ -199,6 +199,23 @@ func (s *webServer) commands(w http.ResponseWriter, r *http.Request) {
 			f.Since = t
 		}
 	}
+	return f
+}
+
+func (s *webServer) commands(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	f := filterFromQuery(q)
+	f.Limit = 50
+	if n, err := strconv.Atoi(q.Get("n")); err == nil && n > 0 && n <= 500 {
+		f.Limit = n
+	}
+	ctxN := 0
+	if n, err := strconv.Atoi(q.Get("ctx")); err == nil && n > 0 {
+		if n > 10 {
+			n = 10
+		}
+		ctxN = n
+	}
 
 	var out []cmdJSON
 	if qs := strings.TrimSpace(q.Get("q")); qs != "" {
@@ -211,6 +228,9 @@ func (s *webServer) commands(w http.ResponseWriter, r *http.Request) {
 		for _, c := range res {
 			j := s.toJSON(c)
 			j.Snippet = s.snippetHTML(strings.TrimSpace(c.Snippet))
+			if ctxN > 0 {
+				j.Ctx = s.ctxHTML(c, qs, ctxN)
+			}
 			out = append(out, j)
 		}
 	} else {
@@ -224,6 +244,48 @@ func (s *webServer) commands(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, map[string]any{"commands": out})
+}
+
+// ctxHTML renders grep-style context hunks from a search hit's stored
+// plain output as HTML (search with ctx=N — parity with `search -C`).
+// Redaction runs on the whole text BEFORE matching and highlighting, so
+// highlight markup can never split a secret past the redact patterns.
+func (s *webServer) ctxHTML(c store.Command, query string, n int) string {
+	const maxHunks = 5
+	text, err := s.st.Plain(c.ID)
+	if err != nil || text == "" {
+		return ""
+	}
+	if s.redact {
+		text, _ = redact.String(text, s.extra)
+	}
+	hunks, shown, total := grepContext(text, query, n, n, maxHunks)
+	if total == 0 {
+		return ""
+	}
+	const so, se = "\x00S\x00", "\x00E\x00"
+	var sb strings.Builder
+	for hi, h := range hunks {
+		if hi > 0 {
+			sb.WriteString("<span class=\"cx\">     --</span>\n")
+		}
+		for i, ln := range h.Lines {
+			no := h.Start + i + 1
+			if h.IsMatch[i] {
+				clipped := clipLine(ln, matchOffset(ln, query), 220)
+				esc := htmlEscape(highlightMatches(clipped, query, so, se))
+				esc = strings.ReplaceAll(esc, so, "<mark>")
+				esc = strings.ReplaceAll(esc, se, "</mark>")
+				fmt.Fprintf(&sb, "<span class=\"cn\">%5d:</span>%s\n", no, esc)
+			} else {
+				fmt.Fprintf(&sb, "<span class=\"cx\">%5d- %s</span>\n", no, htmlEscape(clipLine(ln, 0, 220)))
+			}
+		}
+	}
+	if total > shown {
+		fmt.Fprintf(&sb, "<span class=\"cx\">(%d more matching lines)</span>\n", total-shown)
+	}
+	return sb.String()
 }
 
 func (s *webServer) command(w http.ResponseWriter, r *http.Request) {
@@ -299,6 +361,11 @@ func (s *webServer) diff(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *webServer) stats(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	if dim := q.Get("by"); dim != "" {
+		s.breakdown(w, dim, q)
+		return
+	}
 	st, err := s.st.Stats()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -308,6 +375,56 @@ func (s *webServer) stats(w http.ResponseWriter, r *http.Request) {
 		"commands": st.Commands, "sessions": st.Sessions,
 		"raw_bytes": st.RawBytes, "db_bytes": st.DBBytes,
 		"redacting": s.redact, "version": version,
+	})
+}
+
+type statJSON struct {
+	Key   string `json:"key"`
+	Count int    `json:"count"`
+	Fails int    `json:"fails"`
+	DurMs int64  `json:"dur_ms"`
+}
+
+// breakdown serves /api/stats?by=cmd|cwd|exit|host|day scoped by the
+// shared filters — the web-UI face of `backscroll stats --by`.
+func (s *webServer) breakdown(w http.ResponseWriter, dim string, q url.Values) {
+	switch dim {
+	case "cmd", "cwd", "exit", "host", "day":
+	default:
+		http.Error(w, "by: want cmd, cwd, exit, host or day", http.StatusBadRequest)
+		return
+	}
+	f := filterFromQuery(q)
+	f.Limit = 1 << 30
+	cmds, err := s.st.List(f)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	list := groupStats(cmds, dim)
+	topN := 15
+	if n, err := strconv.Atoi(q.Get("n")); err == nil && n > 0 && n <= 100 {
+		topN = n
+	}
+	shown := list
+	if len(list) > topN {
+		if dim == "day" {
+			shown = list[len(list)-topN:] // most recent days
+		} else {
+			shown = list[:topN]
+		}
+	}
+	home, _ := os.UserHomeDir()
+	out := make([]statJSON, 0, len(shown))
+	for _, g := range shown {
+		key := statDisplayKey(dim, g.key, home)
+		if s.redact {
+			key, _ = redact.String(key, s.extra)
+		}
+		out = append(out, statJSON{Key: key, Count: g.count, Fails: g.fails, DurMs: g.dur.Milliseconds()})
+	}
+	writeJSON(w, map[string]any{
+		"by": dim, "groups": out, "total": len(cmds), "distinct": len(list),
 	})
 }
 

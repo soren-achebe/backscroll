@@ -97,6 +97,32 @@ func statsBreakdown(dim string, topN int, f store.Filter) error {
 		}
 		return nil
 	}
+	list := groupStats(cmds, dim)
+	if dim == "day" || dim == "date" {
+		if topN > 0 && len(list) > topN {
+			list = list[len(list)-topN:] // most recent days
+		}
+		printDayTable(list)
+	} else {
+		shown := list
+		if topN > 0 && len(list) > topN {
+			shown = list[:topN]
+		}
+		printStatTable(dim, shown)
+		if len(shown) < len(list) {
+			fmt.Printf("\n(top %d of %d — %d commands total; -n 0 for all)\n",
+				len(shown), len(list), len(cmds))
+			return nil
+		}
+	}
+	fmt.Printf("\n(%d commands total)\n", len(cmds))
+	return nil
+}
+
+// groupStats buckets commands along one dimension and sorts the result:
+// day → chronological, everything else → count desc, key asc. Shared by
+// the stats CLI and the web UI's /api/stats?by= endpoint.
+func groupStats(cmds []store.Command, dim string) []*statGroup {
 	groups := map[string]*statGroup{}
 	for _, c := range cmds {
 		key := statKey(dim, c)
@@ -121,10 +147,6 @@ func statsBreakdown(dim string, topN int, f store.Filter) error {
 	}
 	if dim == "day" || dim == "date" {
 		sort.Slice(list, func(i, j int) bool { return list[i].key < list[j].key })
-		if topN > 0 && len(list) > topN {
-			list = list[len(list)-topN:] // most recent days
-		}
-		printDayTable(list)
 	} else {
 		sort.Slice(list, func(i, j int) bool {
 			if list[i].count != list[j].count {
@@ -132,19 +154,8 @@ func statsBreakdown(dim string, topN int, f store.Filter) error {
 			}
 			return list[i].key < list[j].key
 		})
-		shown := list
-		if topN > 0 && len(list) > topN {
-			shown = list[:topN]
-		}
-		printStatTable(dim, shown)
-		if len(shown) < len(list) {
-			fmt.Printf("\n(top %d of %d — %d commands total; -n 0 for all)\n",
-				len(shown), len(list), len(cmds))
-			return nil
-		}
 	}
-	fmt.Printf("\n(%d commands total)\n", len(cmds))
-	return nil
+	return list
 }
 
 // statKey computes the grouping key of one command for a dimension.
@@ -281,29 +292,37 @@ func printStatTable(dim string, list []*statGroup) {
 	home, _ := os.UserHomeDir()
 	fmt.Printf("  \x1b[2m%7s  %5s  %10s  %s\x1b[0m\n", "count", "fail%", "total time", label)
 	for _, g := range list {
-		key := g.key
-		switch dim {
-		case "cwd", "dir":
-			if home != "" {
-				if key == home {
-					key = "~"
-				} else if strings.HasPrefix(key, home+"/") {
-					key = "~" + key[len(home):]
-				}
-			}
-		case "exit":
-			if sig := sigNames[key]; sig != "" {
-				key += " (" + sig + ")"
-			} else if key == "?" {
-				key += " (no exit recorded)"
-			}
-		}
+		key := statDisplayKey(dim, g.key, home)
 		failPct := "-"
 		if g.fails > 0 {
 			failPct = fmt.Sprintf("%d%%", (g.fails*100+g.count/2)/g.count)
 		}
 		fmt.Printf("  %7d  %5s  %10s  %s\n", g.count, failPct, humanDur(g.dur), key)
 	}
+}
+
+// statDisplayKey renders a group key for humans: cwd is ~-shortened,
+// exit codes get their signal label. Shared by CLI and web UI.
+func statDisplayKey(dim, key, home string) string {
+	switch dim {
+	case "cwd", "dir":
+		if home != "" {
+			if key == home {
+				return "~"
+			}
+			if strings.HasPrefix(key, home+"/") {
+				return "~" + key[len(home):]
+			}
+		}
+	case "exit":
+		if sig := sigNames[key]; sig != "" {
+			return key + " (" + sig + ")"
+		}
+		if key == "?" {
+			return key + " (no exit recorded)"
+		}
+	}
+	return key
 }
 
 func printDayTable(list []*statGroup) {

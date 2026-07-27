@@ -216,3 +216,103 @@ func TestServeReadOnly(t *testing.T) {
 }
 
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
+
+func TestServeSearchContext(t *testing.T) {
+	_, h := newTestServer(t, false)
+	_, body := get(t, h, "/api/commands?q=latency&ctx=1")
+	cs := body["commands"].([]any)
+	if len(cs) != 2 {
+		t.Fatalf("want 2 matches, got %d", len(cs))
+	}
+	ctx := cs[0].(map[string]any)["ctx"].(string)
+	if !strings.Contains(ctx, "<mark>latency</mark>") {
+		t.Fatalf("no highlighted match in ctx: %q", ctx)
+	}
+	// the line before ("status: …") must appear as dim context with its number
+	if !strings.Contains(ctx, `<span class="cx">    1- status:`) {
+		t.Fatalf("missing context line: %q", ctx)
+	}
+	if !strings.Contains(ctx, `<span class="cn">    2:</span>`) {
+		t.Fatalf("missing match line number: %q", ctx)
+	}
+	if strings.Contains(ctx, "\x1b") || strings.Contains(ctx, "\x00") {
+		t.Fatalf("raw escape/sentinel leaked: %q", ctx)
+	}
+	// without ctx param there is no ctx field
+	_, body = get(t, h, "/api/commands?q=latency")
+	if _, ok := cs[0].(map[string]any)["snippet"]; !ok {
+		t.Fatal("snippet should still be present")
+	}
+	if c := body["commands"].([]any)[0].(map[string]any)["ctx"]; c != nil {
+		t.Fatalf("ctx should be omitted, got %v", c)
+	}
+}
+
+func TestServeSearchContextRedact(t *testing.T) {
+	_, h := newTestServer(t, true)
+	// redaction runs before matching: a query hitting only the secret's
+	// masked span yields no context (the secret must not leak)
+	_, body := get(t, h, "/api/commands?q=AKIAIOSFODNN7EXAMPLE&ctx=2")
+	for _, c := range body["commands"].([]any) {
+		if ctx, _ := c.(map[string]any)["ctx"].(string); strings.Contains(ctx, "AKIAIOSFODNN7EXAMPLE") {
+			t.Fatalf("secret leaked in ctx: %q", ctx)
+		}
+	}
+	// a non-secret query on the same row still gets context, redacted
+	_, body = get(t, h, "/api/commands?q=alert&ctx=2")
+	cs := body["commands"].([]any)
+	if len(cs) != 1 {
+		t.Fatalf("want 1 match, got %d", len(cs))
+	}
+	ctx := cs[0].(map[string]any)["ctx"].(string)
+	if !strings.Contains(ctx, "<mark>alert</mark>") {
+		t.Fatalf("no match in ctx: %q", ctx)
+	}
+	if strings.Contains(ctx, "AKIAIOSFODNN7EXAMPLE") {
+		t.Fatalf("secret leaked in context lines: %q", ctx)
+	}
+}
+
+func TestServeStatsBreakdown(t *testing.T) {
+	_, h := newTestServer(t, false)
+	_, body := get(t, h, "/api/stats?by=cmd")
+	gs := body["groups"].([]any)
+	if len(gs) != 3 {
+		t.Fatalf("want 3 groups, got %v", gs)
+	}
+	top := gs[0].(map[string]any)
+	if top["key"] != "curl" || top["count"].(float64) != 2 {
+		t.Fatalf("top group: %v", top)
+	}
+	if body["total"].(float64) != 4 || body["distinct"].(float64) != 3 {
+		t.Fatalf("totals: %v %v", body["total"], body["distinct"])
+	}
+
+	// filters scope the breakdown
+	_, body = get(t, h, "/api/stats?by=cmd&exit=fail")
+	gs = body["groups"].([]any)
+	if len(gs) != 1 || gs[0].(map[string]any)["key"] != "grep" {
+		t.Fatalf("filtered groups: %v", gs)
+	}
+
+	// exit dimension gets display keys
+	_, body = get(t, h, "/api/stats?by=exit")
+	keys := map[string]bool{}
+	for _, g := range body["groups"].([]any) {
+		keys[g.(map[string]any)["key"].(string)] = true
+	}
+	if !keys["0"] || !keys["1"] {
+		t.Fatalf("exit keys: %v", keys)
+	}
+
+	// day dimension: single chronological bucket for our seed data
+	_, body = get(t, h, "/api/stats?by=day")
+	if gs := body["groups"].([]any); len(gs) != 1 || gs[0].(map[string]any)["count"].(float64) != 4 {
+		t.Fatalf("day groups: %v", gs)
+	}
+
+	// bad dimension → 400
+	if w, _ := get(t, h, "/api/stats?by=bogus"); w.Code != http.StatusBadRequest {
+		t.Fatalf("bogus dim: want 400, got %d", w.Code)
+	}
+}

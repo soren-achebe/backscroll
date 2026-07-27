@@ -43,6 +43,18 @@ main { max-width:1100px; margin:0 auto; padding:12px 16px 60px; }
 .snip { padding:0 13px 9px 4.8em; color:var(--dim); font-size:12px;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .snip mark { background:transparent; color:var(--mark); font-weight:700; }
+.ctxpre { margin:0; padding:2px 13px 9px 4.8em; font-size:12px; max-height:240px;
+  overflow:auto; white-space:pre; }
+.ctxpre mark { background:transparent; color:var(--mark); font-weight:700; }
+.cn { color:var(--ok); } .cx { color:var(--dim); opacity:.75; }
+table.stats { border-collapse:collapse; margin:14px auto 0; width:100%; max-width:820px; }
+table.stats th { text-align:left; color:var(--dim); font-weight:400; font-size:12px;
+  padding:4px 12px; border-bottom:1px solid var(--border); }
+table.stats td { padding:5px 12px; border-bottom:1px solid var(--border); vertical-align:baseline; }
+table.stats td.num { text-align:right; color:var(--fg); white-space:nowrap; }
+table.stats td.key { overflow-wrap:anywhere; }
+table.stats .bar { color:var(--c6); letter-spacing:-1px; }
+.statnote { color:var(--dim); font-size:12px; text-align:center; padding:12px 0; }
 .body { border-top:1px solid var(--border); display:none; }
 .body.open { display:block; }
 .toolbar { display:flex; gap:8px; padding:8px 13px; align-items:center;
@@ -77,9 +89,11 @@ kbd { background:var(--panel2); border:1px solid var(--border); border-radius:4p
 <header>
   <div class="logo">back<span>scroll</span></div>
   <input id="q" type="search" placeholder="search output &amp; commands…  ( / )" autocomplete="off">
+  <select id="ctx" title="context lines around search matches"><option value="">no context</option><option value="2">±2 lines</option><option value="5">±5 lines</option></select>
   <select id="exit"><option value="">all exits</option><option value="fail">failed</option><option value="0">exit 0</option></select>
   <select id="since"><option value="">any time</option><option value="1h">last hour</option><option value="1d">last day</option><option value="1w">last week</option></select>
   <select id="host" style="display:none"><option value="">all hosts</option></select>
+  <select id="view"><option value="">history</option><option value="cmd">by command</option><option value="cwd">by directory</option><option value="exit">by exit</option><option value="host">by host</option><option value="day">by day</option></select>
   <span id="redacting">redacting</span>
   <span id="stats"></span>
 </header>
@@ -102,7 +116,8 @@ function dur(ms) {
   if (ms < 0) return "";
   if (ms < 1000) return ms + "ms";
   if (ms < 60000) return (ms/1000).toFixed(1) + "s";
-  return (ms/60000|0) + "m" + ((ms%60000)/1000|0) + "s";
+  if (ms < 3600000) return (ms/60000|0) + "m" + ((ms%60000)/1000|0) + "s";
+  return (ms/3600000|0) + "h" + ((ms%3600000)/60000|0) + "m";
 }
 function esc(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function kb(n) { return n < 1024 ? n + " B" : n < 1048576 ? (n/1024).toFixed(1) + " KB" : (n/1048576).toFixed(1) + " MB"; }
@@ -111,8 +126,14 @@ async function refresh() {
   if (ctl) ctl.abort();
   ctl = new AbortController();
   const p = new URLSearchParams();
-  if (q.value.trim()) p.set("q", q.value.trim());
   for (const id of ["exit","since","host"]) { const v = $("#"+id).value; if (v) p.set(id, v); }
+  const view = $("#view").value;
+  q.disabled = !!view;
+  if (view) return refreshStats(view, p);
+  if (q.value.trim()) {
+    p.set("q", q.value.trim());
+    if ($("#ctx").value) p.set("ctx", $("#ctx").value);
+  }
   p.set("n", "100");
   let d;
   try { d = await (await fetch("/api/commands?" + p, {signal: ctl.signal})).json(); }
@@ -130,9 +151,34 @@ async function refresh() {
         (c.host ? '<span class="host">[' + esc(c.host) + ']</span>' : '') +
         '<span class="meta">' + ago(c.started_at) + (dur(c.dur_ms) ? " · " + dur(c.dur_ms) : "") + '</span>' +
       '</div>' +
-      (c.snippet ? '<div class="snip">' + c.snippet + '</div>' : '') +
+      (c.ctx ? '<pre class="ctxpre">' + c.ctx + '</pre>'
+             : c.snippet ? '<div class="snip">' + c.snippet + '</div>' : '') +
       '<div class="body"></div></div>';
   }).join("");
+}
+
+async function refreshStats(view, p) {
+  p.set("by", view);
+  p.set("n", "25");
+  let d;
+  try { d = await (await fetch("/api/stats?" + p, {signal: ctl.signal})).json(); }
+  catch (e) { if (e.name !== "AbortError") list.innerHTML = '<div class="empty">server gone — restart <b>backscroll serve</b></div>'; return; }
+  const gs = d.groups || [];
+  if (!gs.length) { list.innerHTML = '<div class="empty">nothing here</div>'; return; }
+  const max = Math.max(...gs.map(g => g.count));
+  const label = {cmd:"command",cwd:"directory",exit:"exit",host:"host",day:"day"}[view] || view;
+  list.innerHTML =
+    '<table class="stats"><tr><th>' + label + '</th><th style="text-align:right">count</th><th></th><th style="text-align:right">fail%</th><th style="text-align:right">total time</th></tr>' +
+    gs.map(g => {
+      const pct = Math.round(g.fails * 100 / g.count);
+      const bar = "█".repeat(Math.max(1, Math.round(g.count * 18 / max)));
+      return '<tr><td class="key">' + esc(g.key) + '</td>' +
+        '<td class="num">' + g.count + '</td><td class="bar">' + bar + '</td>' +
+        '<td class="num">' + (g.fails ? '<span class="exit-bad">' + pct + '%</span>' : '<span class="di">–</span>') + '</td>' +
+        '<td class="num">' + (g.dur_ms > 0 ? dur(g.dur_ms) : '<span class="di">–</span>') + '</td></tr>';
+    }).join("") + '</table>' +
+    '<div class="statnote">' + d.total + ' commands · ' + d.distinct + ' groups' +
+      (d.distinct > gs.length ? ' · top ' + gs.length + ' shown' : '') + '</div>';
 }
 
 async function toggle(row) {
@@ -183,7 +229,7 @@ list.addEventListener("click", e => {
   if (head) toggle(head.closest(".row"));
 });
 q.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(refresh, 150); });
-for (const id of ["exit","since","host"]) $("#"+id).addEventListener("change", refresh);
+for (const id of ["exit","since","host","view","ctx"]) $("#"+id).addEventListener("change", refresh);
 document.addEventListener("keydown", e => {
   if (e.key === "/" && document.activeElement !== q) { e.preventDefault(); q.focus(); q.select(); }
   if (e.key === "Escape" && document.activeElement === q) q.blur();

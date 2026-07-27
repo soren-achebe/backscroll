@@ -141,8 +141,11 @@ convention).
 
 *serve* [*--addr* _host:port_] [*--redact*]
 	Serve a local, read-only web UI for browsing and searching history:
-	search-as-you-type over commands and outputs, ANSI colors rendered,
-	one-click diff against the previous run of the same command. Binds
+	search-as-you-type over commands and outputs (with grep-style
+	context lines around matches), ANSI colors rendered, one-click diff
+	against the previous run of the same command, and stats breakdowns
+	(by command, directory, exit, host or day) scoped by the active
+	filters. Binds
 	to loopback only by default (_127.0.0.1:4133_) and rejects non-local
 	Host headers (DNS-rebinding guard). *--redact* masks secrets in
 	everything served (colors are lost on redacted output).

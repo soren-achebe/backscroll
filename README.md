@@ -343,7 +343,11 @@ history:
 - **Search as you type** across commands *and* their outputs (FTS5 under
   the hood — instant even with tens of thousands of commands), with
   match snippets, plus the same filters as the CLI (failures only, time
-  range).
+  range). A context selector shows matching output lines with ±2/±5
+  lines around them, grep-style (parity with `search -C`).
+- **Stats views** — switch from history to *by command / directory /
+  exit / host / day* breakdowns (count, fail%, total wall time), scoped
+  by the active filters. `stats --by cmd --exit fail`, but clickable.
 - **Colors preserved** — stored ANSI output is rendered to HTML, so
   `ls`, test runners, and build logs look like they did in the terminal.
   Progress-bar spam (`\r` overwrites) collapses to its final state.
