@@ -384,12 +384,20 @@ func (s *mcpServer) red(text string) string {
 
 func (s *mcpServer) headline(c store.Command) string {
 	from := ""
-	if !c.Local() {
+	if !c.Local() && c.Host != "" {
 		from = " · from " + c.Host
 	}
-	return fmt.Sprintf("id %d · %s · cwd %s · exit %s · took %s · %s%s\n$ %s",
-		c.ID, c.StartedAt.Format("2006-01-02 15:04:05"), c.Cwd, exitStr(c),
-		fmtDur(c.EndedAt.Sub(c.StartedAt)), humanBytes(c.OutputLen), from, s.red(c.Cmd))
+	took := ""
+	if sp := fmtSpan(c); sp != "" {
+		took = " · took " + sp
+	}
+	hist := ""
+	if strings.HasPrefix(c.Machine, "hist:") {
+		hist = "\n(imported from shell history — no output was recorded)"
+	}
+	return fmt.Sprintf("id %d · %s · cwd %s · exit %s%s · %s%s\n$ %s%s",
+		c.ID, fmtWhen(c.StartedAt), c.Cwd, exitStr(c),
+		took, humanBytes(c.OutputLen), from, s.red(c.Cmd), hist)
 }
 
 func (s *mcpServer) toolSearch(raw json.RawMessage) any {
@@ -578,7 +586,7 @@ func (s *mcpServer) toolDiff(raw json.RawMessage) any {
 	}
 	label := func(c *store.Command) string {
 		return fmt.Sprintf("#%d $ %s  (%s, exit %s)",
-			c.ID, s.red(c.Cmd), c.StartedAt.Format("2006-01-02 15:04:05"), exitStr(*c))
+			c.ID, s.red(c.Cmd), fmtWhen(c.StartedAt), exitStr(*c))
 	}
 	oldOut := string(ansi.Strip(older.Output))
 	newOut := string(ansi.Strip(newer.Output))

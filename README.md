@@ -213,6 +213,28 @@ Release tarballs include a man page (`man/backscroll.1`; source is
    > semantics instead, use `backscroll run --login` (and remember a login
    > bash reads `~/.bash_profile`, *not* `~/.bashrc`).
 
+## Bring your existing history
+
+A fresh database means an empty picker. Seed it from the history you
+already have:
+
+```console
+$ backscroll import atuin
+imported 48312 entries from atuin (~/.local/share/atuin/history.db)
+$ backscroll import zsh
+imported 9871 entries from zsh (~/.zsh_history)
+```
+
+`atuin` imports are the richest (timestamps, exit codes, cwd, hostname —
+their sync means one import covers all your machines). `zsh` gets
+timestamps and durations if you had `EXTENDED_HISTORY` set, `bash` gets
+timestamps if you had `HISTTIMEFORMAT` set, `fish` always has
+timestamps. Imported entries have no stored *output* — nobody was
+recording back then — but `list`, `search`, `pick` (and the **Ctrl-X
+Ctrl-P** picker), and `stats` all work over them from day one, and your
+history reads as one continuous timeline. Re-running an import is
+incremental: it only adds entries it hasn't seen.
+
 ## Use
 
 | command | what it does |
@@ -235,6 +257,8 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 | `backscroll export 3141 --format cast` | asciicast v2 — replay with `asciinema play` |
 | `backscroll export -1 --format json` | structured record for scripting |
 | `backscroll export -1 --format html -o out.html` | self-contained HTML page with full ANSI color — attach to a ticket, share as-is |
+| `backscroll import atuin` | seed the DB from your [atuin](https://github.com/atuinsh/atuin) history — timestamps, exits, cwds and hosts carry over ([details](#bring-your-existing-history)) |
+| `backscroll import zsh` / `bash` / `fish` | …or from plain history files |
 | `backscroll sync init ~/Sync/bks` | cross-machine sync through any shared folder — encrypted, serverless ([details](#cross-machine-sync)) |
 | `... --host laptop` / `--host local` | list/search/pick filter: only that machine's history |
 | `backscroll stats` | how much is stored |

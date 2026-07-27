@@ -94,6 +94,11 @@ Usage:
                                  --format md (default: paste into an issue),
                                  cast (asciinema v2), json. --details folds
                                  long md output; -o FILE writes to a file
+  backscroll import <source>     seed the DB from history you already have:
+                                 atuin (times/exits/cwd/host), zsh, bash,
+                                 fish. Re-running only adds new entries;
+                                 --dry-run previews, [path] overrides the
+                                 default location
   backscroll stats               database statistics; --by cmd|cwd|exit|host|day
                                  breaks history down (counts, fail%, total
                                  time), same filters as list — e.g.
@@ -152,6 +157,8 @@ func main() {
 		err = cmdDiff(args)
 	case "export":
 		err = cmdExport(args)
+	case "import":
+		err = cmdImport(args)
 	case "stats":
 		err = cmdStats(args)
 	case "prune":
@@ -243,7 +250,28 @@ func fmtDur(d time.Duration) string {
 	}
 }
 
+// fmtSpan renders a command's wall time, or "" when the end (or start)
+// is unknown — e.g. entries imported from shell history files.
+func fmtSpan(c store.Command) string {
+	if c.EndedAt.IsZero() || c.StartedAt.IsZero() || c.StartedAt.Unix() <= 0 || c.EndedAt.Before(c.StartedAt) {
+		return ""
+	}
+	return fmtDur(c.EndedAt.Sub(c.StartedAt))
+}
+
+// fmtWhen renders an absolute timestamp, or "time unknown" for entries
+// whose source had no timestamps (plain bash history imports).
+func fmtWhen(t time.Time) string {
+	if t.IsZero() || t.Unix() <= 0 {
+		return "time unknown"
+	}
+	return t.Format("2006-01-02 15:04:05")
+}
+
 func fmtAgo(t time.Time) string {
+	if t.IsZero() || t.Unix() <= 0 {
+		return "unknown"
+	}
 	d := time.Since(t)
 	switch {
 	case d < time.Minute:
@@ -408,7 +436,7 @@ func cmdList(args []string) error {
 			mark = "✗"
 		}
 		line := fmt.Sprintf("%5d  %s %-12s %8s  %8s  %s%s",
-			c.ID, mark, fmtAgo(c.StartedAt), fmtDur(c.EndedAt.Sub(c.StartedAt)),
+			c.ID, mark, fmtAgo(c.StartedAt), fmtSpan(c),
 			humanBytes(c.OutputLen), hostTag(c, color), oneLine(c.Cmd, 80))
 		if color && mark == "✗" {
 			line = "\x1b[31m" + line + "\x1b[0m"
@@ -421,7 +449,7 @@ func cmdList(args []string) error {
 // hostTag renders a "[host] " prefix for entries imported from another
 // machine via sync ("" for local ones).
 func hostTag(c store.Command, color bool) string {
-	if c.Local() {
+	if c.Local() || c.Host == "" {
 		return ""
 	}
 	if color {
@@ -493,12 +521,21 @@ func cmdShow(args []string) error {
 	if !*quiet {
 		fmt.Printf("\x1b[1m$ %s\x1b[0m\n", c.Cmd)
 		from := ""
-		if !c.Local() {
+		if !c.Local() && c.Host != "" {
 			from = " · from " + c.Host
 		}
-		fmt.Printf("\x1b[2m# id %d · %s · cwd %s · exit %s · took %s · %s%s\x1b[0m\n",
-			c.ID, c.StartedAt.Format("2006-01-02 15:04:05"), c.Cwd, exitStr(*c),
-			fmtDur(c.EndedAt.Sub(c.StartedAt)), humanBytes(c.OutputLen), from)
+		when := fmtWhen(c.StartedAt)
+		took := ""
+		if sp := fmtSpan(*c); sp != "" {
+			took = " · took " + sp
+		}
+		fmt.Printf("\x1b[2m# id %d · %s · cwd %s · exit %s%s · %s%s\x1b[0m\n",
+			c.ID, when, c.Cwd, exitStr(*c),
+			took, humanBytes(c.OutputLen), from)
+		if strings.HasPrefix(c.Machine, "hist:") {
+			fmt.Printf("\x1b[2m# imported from shell history (%s) — no output was recorded\x1b[0m\n",
+				strings.TrimPrefix(c.Machine, "hist:"))
+		}
 	}
 	out := c.Output
 	if !*raw {
@@ -913,7 +950,7 @@ func cmdDiff(args []string) error {
 
 	label := func(c *store.Command) string {
 		return fmt.Sprintf("#%d $ %s  (%s, exit %s)",
-			c.ID, c.Cmd, c.StartedAt.Format("2006-01-02 15:04:05"), exitStr(*c))
+			c.ID, c.Cmd, fmtWhen(c.StartedAt), exitStr(*c))
 	}
 	ops := diff.Lines(string(ansi.Strip(older.Output)), string(ansi.Strip(newer.Output)))
 	color := term.IsTerminal(int(os.Stdout.Fd()))

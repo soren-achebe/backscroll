@@ -46,7 +46,7 @@ fi
 if (( $+functions[compdef] )); then
   _backscroll() {
     if (( CURRENT == 2 )); then
-      compadd run init list last show search pick diff export sync stats prune delete redact mcp serve off on doctor version help
+      compadd run init list last show search pick diff export import sync stats prune delete redact mcp serve off on doctor version help
     elif [[ $words[2] == init ]]; then
       compadd bash zsh fish pwsh tmux zellij screen
     elif [[ $words[2] == export && $words[CURRENT-1] == (--format|-format) ]]; then
@@ -61,6 +61,10 @@ if (( $+functions[compdef] )); then
       elif [[ $words[CURRENT] == -* ]]; then
         compadd -- --format --details --raw --redact -o -n --session --cwd --exit --since --until --host
       fi
+    elif [[ $words[2] == import && CURRENT == 3 ]]; then
+      compadd atuin zsh bash fish
+    elif [[ $words[2] == import ]]; then
+      compadd -- --dry-run --host -n
     elif [[ $words[2] == sync && CURRENT == 3 ]]; then
       compadd init export import status
     elif [[ $words[2] == serve ]]; then

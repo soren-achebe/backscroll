@@ -185,8 +185,8 @@ func exportMarkdown(w *os.File, cmds []*store.Command, details, raw bool) error 
 		}
 		fence := fenceFor(block)
 		meta := fmt.Sprintf("exit %s · %s · %s",
-			exitStr(*c), fmtDur(c.EndedAt.Sub(c.StartedAt)),
-			c.StartedAt.Format("2006-01-02 15:04"))
+			exitStr(*c), fmtSpan(*c),
+			fmtWhen(c.StartedAt))
 		if c.Truncated {
 			meta += " · output truncated"
 		}

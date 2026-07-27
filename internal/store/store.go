@@ -445,7 +445,7 @@ func scanCmd(rows *sql.Rows) (Command, error) {
 	var st, en, oseq sql.NullInt64
 	err := rows.Scan(&c.ID, &c.SessionID, &c.Cmd, &c.Cwd, &c.ExitCode, &st, &en, &c.OutputLen, &c.Truncated,
 		&c.Machine, &c.Host, &oseq)
-	if st.Valid {
+	if st.Valid && st.Int64 > 0 { // 0 = unknown (shell-history import)
 		c.StartedAt = time.UnixMilli(st.Int64)
 	}
 	if en.Valid {
@@ -533,7 +533,7 @@ func (f Filter) limit() int {
 
 func (s *Store) List(f Filter) ([]Command, error) {
 	where, args := f.where("")
-	q := `SELECT ` + cmdCols + ` FROM commands` + where + ` ORDER BY id DESC LIMIT ?`
+	q := `SELECT ` + cmdCols + ` FROM commands` + where + ` ORDER BY started_at DESC, id DESC LIMIT ?`
 	args = append(args, f.limit())
 	rows, err := s.db.Query(q, args...)
 	if err != nil {
@@ -564,7 +564,7 @@ func (s *Store) Get(n int64) (*Command, error) {
 		if off > 0 {
 			off--
 		}
-		q = `SELECT ` + cmdCols + `, output FROM commands ORDER BY id DESC LIMIT 1 OFFSET ?`
+		q = `SELECT ` + cmdCols + `, output FROM commands ORDER BY started_at DESC, id DESC LIMIT 1 OFFSET ?`
 		arg = off
 	}
 	row := s.db.QueryRow(q, arg)
@@ -576,7 +576,7 @@ func (s *Store) Get(n int64) (*Command, error) {
 	if err != nil {
 		return nil, err
 	}
-	if st.Valid {
+	if st.Valid && st.Int64 > 0 {
 		c.StartedAt = time.UnixMilli(st.Int64)
 	}
 	if en.Valid {
@@ -633,7 +633,7 @@ func (s *Store) Search(query string, f Filter) ([]Command, error) {
 		       snippet(commands_fts, 1, char(27)||'[1;31m', char(27)||'[0m', '…', 12)
 		FROM commands_fts JOIN commands c ON c.id = commands_fts.rowid
 		WHERE commands_fts MATCH ?`+extra+`
-		ORDER BY c.id DESC LIMIT ?`, args...)
+		ORDER BY c.started_at DESC, c.id DESC LIMIT ?`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -646,7 +646,7 @@ func (s *Store) Search(query string, f Filter) ([]Command, error) {
 			&c.OutputLen, &c.Truncated, &c.Machine, &c.Host, &oseq, &c.Snippet); err != nil {
 			return nil, err
 		}
-		if st.Valid {
+		if st.Valid && st.Int64 > 0 {
 			c.StartedAt = time.UnixMilli(st.Int64)
 		}
 		if en.Valid {
@@ -810,12 +810,18 @@ func (s *Store) RebuildFTS() error {
 	return err
 }
 
-// PrevSame returns the most recent command before beforeID whose command
-// line matches cmd exactly. Used by `backscroll diff <id>` to compare a
-// command against its previous run.
+// PrevSame returns the command immediately before beforeID in timeline
+// order (started_at, then id) whose command line matches cmd exactly.
+// Used by `backscroll diff <id>` to compare a command against its
+// previous run. Shell-history imports (machine "hist:*") are skipped —
+// they never have output, so diffing against them is useless.
 func (s *Store) PrevSame(beforeID int64, cmd string) (*Command, error) {
 	row := s.db.QueryRow(
-		`SELECT id FROM commands WHERE id < ? AND cmd = ? ORDER BY id DESC LIMIT 1`,
+		`SELECT c.id FROM commands c, (SELECT started_at, id FROM commands WHERE id=?1) a
+		 WHERE c.cmd = ?2
+		   AND (c.started_at < a.started_at OR (c.started_at = a.started_at AND c.id < a.id))
+		   AND (c.machine IS NULL OR c.machine NOT LIKE 'hist:%')
+		 ORDER BY c.started_at DESC, c.id DESC LIMIT 1`,
 		beforeID, cmd)
 	var id int64
 	if err := row.Scan(&id); err != nil {

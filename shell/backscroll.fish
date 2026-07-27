@@ -41,9 +41,13 @@ end
 
 # Tab completion (active in and out of recorded sessions).
 complete -c backscroll -f
-complete -c backscroll -n __fish_use_subcommand -a "run init list last show search pick diff export sync stats prune delete redact mcp serve off on doctor version help"
+complete -c backscroll -n __fish_use_subcommand -a "run init list last show search pick diff export import sync stats prune delete redact mcp serve off on doctor version help"
 complete -c backscroll -n "__fish_seen_subcommand_from init" -a "bash zsh fish pwsh tmux zellij screen"
 complete -c backscroll -n "__fish_seen_subcommand_from export" -l format -a "md cast json html"
+complete -c backscroll -n "__fish_seen_subcommand_from import; and not __fish_seen_subcommand_from atuin zsh bash fish" -a "atuin zsh bash fish" -x
+complete -c backscroll -n "__fish_seen_subcommand_from import" -l dry-run -d "parse and report, write nothing"
+complete -c backscroll -n "__fish_seen_subcommand_from import" -l host -d "label entries with this origin host" -x
+complete -c backscroll -n "__fish_seen_subcommand_from import" -s n -d "import at most the newest N entries" -x
 complete -c backscroll -n "__fish_seen_subcommand_from export" -l details -d "md: fold into a <details> block"
 complete -c backscroll -n "__fish_seen_subcommand_from export" -l raw -d "keep ANSI colors"
 complete -c backscroll -n "__fish_seen_subcommand_from export" -l redact -d "mask secrets before exporting"

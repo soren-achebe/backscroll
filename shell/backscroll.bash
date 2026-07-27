@@ -152,7 +152,7 @@ _backscroll_complete() {
   local cur=${COMP_WORDS[COMP_CWORD]}
   local prev=${COMP_WORDS[COMP_CWORD-1]:-}
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "run init list last show search pick diff export sync stats prune delete redact mcp serve off on doctor version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "run init list last show search pick diff export import sync stats prune delete redact mcp serve off on doctor version help" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "init" ]; then
     COMPREPLY=($(compgen -W "bash zsh fish pwsh tmux zellij screen" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "export" ] && { [ "$prev" = "--format" ] || [ "$prev" = "-format" ]; }; then
@@ -167,6 +167,10 @@ _backscroll_complete() {
            -*) COMPREPLY=($(compgen -W "--format --details --raw --redact -o -n --session --cwd --exit --since --until --host" -- "$cur")) ;;
          esac ;;
     esac
+  elif [ "${COMP_WORDS[1]}" = "import" ] && [ "$COMP_CWORD" -eq 2 ]; then
+    COMPREPLY=($(compgen -W "atuin zsh bash fish" -- "$cur"))
+  elif [ "${COMP_WORDS[1]}" = "import" ]; then
+    COMPREPLY=($(compgen -W "--dry-run --host -n" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "sync" ] && [ "$COMP_CWORD" -eq 2 ]; then
     COMPREPLY=($(compgen -W "init export import status" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "doctor" ]; then

@@ -101,6 +101,22 @@ convention).
 	fail --since 1d* renders today's failures oldest-first (*-n* caps how
 	many, default 20 newest matches).
 
+*import* <*atuin*|*zsh*|*bash*|*fish*> [_path_] [*--dry-run*] [*--host* _NAME_] [*-n* _N_]
+	Seed the database from history you already have, so *list*,
+	*search*, *pick* and *stats* are useful before your first recorded
+	session. Sources: *atuin* (_~/.local/share/atuin/history.db_ —
+	timestamps, exit codes, cwd, hostnames), *zsh* (_$HISTFILE_ or
+	_~/.zsh_history_; timestamps and durations when EXTENDED_HISTORY
+	was set), *bash* (_$HISTFILE_ or _~/.bash_history_; timestamps when
+	HISTTIMEFORMAT was set), *fish* (_fish_history_). Imported entries
+	have no recorded output — nobody was recording at the time — and
+	entries without timestamps show their age as unknown and are
+	deduplicated by command text. Re-running an import only adds new
+	entries. *--dry-run* parses and reports without writing; *--host*
+	labels file-sourced entries with an origin host (e.g. a server's
+	history file you copied over); *-n* keeps only the newest N.
+	Not to be confused with *sync import* below.
+
 *sync* <*init* _dir_|*export*|*import*|*status*>
 	Cross-machine history sync through a shared directory (Syncthing,
 	Dropbox, rsync — any file sync works; no server involved). Each

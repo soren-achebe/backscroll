@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/soren-achebe/backscroll/internal/ansihtml"
 	"github.com/soren-achebe/backscroll/internal/store"
@@ -49,8 +50,8 @@ func exportHTML(w io.Writer, cmds []*store.Command) error {
 		}
 		meta := []string{
 			fmt.Sprintf("<span class=\"%s\">exit %s</span>", cls, htmlEscape(exitStr(*c))),
-			htmlEscape(fmtDur(c.EndedAt.Sub(c.StartedAt))),
-			htmlEscape(c.StartedAt.Format("2006-01-02 15:04:05 MST")),
+			htmlEscape(fmtSpan(*c)),
+			htmlEscape(fmtWhenZone(c.StartedAt)),
 		}
 		if c.Cwd != "" {
 			meta = append(meta, htmlEscape(c.Cwd))
@@ -74,4 +75,13 @@ func exportHTML(w io.Writer, cmds []*store.Command) error {
 		htmlEscape(version))
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// fmtWhenZone is fmtWhen with the timezone kept — a shared HTML page
+// travels across machines, so the zone matters there.
+func fmtWhenZone(t time.Time) string {
+	if t.IsZero() || t.Unix() <= 0 {
+		return "time unknown"
+	}
+	return t.Format("2006-01-02 15:04:05 MST")
 }

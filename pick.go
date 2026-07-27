@@ -137,8 +137,8 @@ func cmdPick(args []string) error {
 		cmdText, _ = redact.String(cmdText, redact.LoadExtra())
 	}
 	header := fmt.Sprintf("\x1b[1m$ %s\x1b[0m\n\x1b[2m# id %d · %s · cwd %s · exit %s · took %s · %s\x1b[0m\n",
-		cmdText, c.ID, c.StartedAt.Format("2006-01-02 15:04:05"), c.Cwd, exitStr(*c),
-		fmtDur(c.EndedAt.Sub(c.StartedAt)), humanBytes(c.OutputLen))
+		cmdText, c.ID, fmtWhen(c.StartedAt), c.Cwd, exitStr(*c),
+		fmtSpan(*c), humanBytes(c.OutputLen))
 	out := c.Output
 	if *pager {
 		*raw = true // the pager handles colors; keep them

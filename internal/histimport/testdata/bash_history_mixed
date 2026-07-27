@@ -1,0 +1,15 @@
+#1785175363
+HISTTIMEFORMAT="%F %T "
+#1785175363
+echo hi
+#1785175363
+false
+#1785175363
+echo 'multi
+line here'
+#1785175364
+exit
+eval "$(/tmp/bks init bash)"
+echo live-session-output
+false
+exit

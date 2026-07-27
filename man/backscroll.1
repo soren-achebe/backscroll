@@ -130,6 +130,24 @@ fail --since 1d\fR renders today'\&s failures oldest-first (\fB-n\fR caps how
 many, default 20 newest matches).\&
 .P
 .RE
+\fBimport\fR <\fBatuin\fR|\fBzsh\fR|\fBbash\fR|\fBfish\fR> [\fIpath\fR] [\fB--dry-run\fR] [\fB--host\fR \fINAME\fR] [\fB-n\fR \fIN\fR]
+.RS 4
+Seed the database from history you already have, so \fBlist\fR,
+\fBsearch\fR, \fBpick\fR and \fBstats\fR are useful before your first recorded
+session.\& Sources: \fBatuin\fR (\fI~/.\&local/share/atuin/history.\&db\fR —
+timestamps, exit codes, cwd, hostnames), \fBzsh\fR (\fI$HISTFILE\fR or
+\fI~/.\&zsh_history\fR; timestamps and durations when EXTENDED_HISTORY
+was set), \fBbash\fR (\fI$HISTFILE\fR or \fI~/.\&bash_history\fR; timestamps when
+HISTTIMEFORMAT was set), \fBfish\fR (\fIfish_history\fR).\& Imported entries
+have no recorded output — nobody was recording at the time — and
+entries without timestamps show their age as unknown and are
+deduplicated by command text.\& Re-running an import only adds new
+entries.\& \fB--dry-run\fR parses and reports without writing; \fB--host\fR
+labels file-sourced entries with an origin host (e.\&g.\& a server'\&s
+history file you copied over); \fB-n\fR keeps only the newest N.\&
+Not to be confused with \fBsync import\fR below.\&
+.P
+.RE
 \fBsync\fR <\fBinit\fR \fIdir\fR|\fBexport\fR|\fBimport\fR|\fBstatus\fR>
 .RS 4
 Cross-machine history sync through a shared directory (Syncthing,
