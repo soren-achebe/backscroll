@@ -23,6 +23,7 @@ func cpFixture(t *testing.T, src, dst string) {
 func TestDetectHistSources(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on windows
 	t.Setenv("XDG_DATA_HOME", "")
 	// an exported HISTFILE must NOT leak into detection
 	t.Setenv("HISTFILE", filepath.Join(home, ".bash_history"))

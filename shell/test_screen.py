@@ -141,7 +141,7 @@ def test_record_inside_screen(env, p):
 
 def test_pick_binding(env, p):
     p.send("\x01B")  # C-a B
-    s = wait_dump(env, "3/3")
+    s = wait_dump(env, "printf")  # a list row, not the counter (see below)
     check(
         "C-a B opens pick in a new window over history",
         "3/3" in s and "nonexistent-scr" in s and "printf" in s,
@@ -165,8 +165,10 @@ def test_pick_binding(env, p):
 
 def test_failures_binding(env, p):
     p.send("\x01F")  # C-a F
-    s = wait_dump(env, "1/1")
-    check("C-a F lists only the failed cmd", "nonexistent-scr" in s)
+    # wait on the item row, not the "1/1" counter: fzf paints the counter
+    # before the list rows, and a hardcopy can catch that gap (seen twice)
+    s = wait_dump(env, "nonexistent-scr")
+    check("C-a F lists only the failed cmd", "nonexistent-scr" in s and "1/1" in s)
     check("C-a F hides successful cmds", "marker-alpha" not in s)
     p.send("\x1b")  # esc closes fzf -> window closes
     time.sleep(2)
