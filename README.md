@@ -248,14 +248,14 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 | `backscroll doctor` | check that everything is wired up |
 
 The **Ctrl-X Ctrl-P** binding comes with the `backscroll init
-<bash|zsh|fish>` snippet (needs [fzf](https://github.com/junegunn/fzf)):
+<bash|zsh|fish|pwsh>` snippet (needs [fzf](https://github.com/junegunn/fzf)):
 it opens the picker over everything you've recorded — whatever you'd
 already typed becomes the initial query — and inserts the selected
 command back at your prompt, like Ctrl-R but you pick by *what the
 command printed*, not just what you typed. Set `BACKSCROLL_NO_BIND=1`
 before the snippet to opt out. (In bash the binding needs bash ≥ 4.0;
 on macOS's stock bash 3.2 it's skipped — recording itself still works
-there.)
+there. In PowerShell it uses PSReadLine, which ships with pwsh.)
 
 ## tmux / zellij / screen / SSH
 
@@ -372,7 +372,7 @@ and nothing leaves the machine except what your agent asks for.
 ## Web UI
 
 `backscroll serve` starts a **local, read-only web UI** over your recorded
-history:
+history (`--open` also opens it in your browser):
 
 ![web UI](demo/serve.png)
 

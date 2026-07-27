@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +30,7 @@ func cmdServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ExitOnError)
 	addr := fs.String("addr", "127.0.0.1:4133", "listen address (loopback strongly recommended)")
 	doRedact := fs.Bool("redact", false, "mask secrets in everything served (colors are lost on redacted output)")
+	doOpen := fs.Bool("open", false, "open the UI in your default browser once listening")
 	fs.Parse(args)
 
 	st, err := openStore()
@@ -61,8 +64,45 @@ func cmdServe(args []string) error {
 	mux.HandleFunc("/export/", srv.exportOne)
 
 	fmt.Printf("backscroll web UI: \x1b[1mhttp://%s/\x1b[0m  (Ctrl-C to stop; read-only)\n", ln.Addr())
+	if *doOpen {
+		go openBrowser(browseURL(ln.Addr().String()))
+	}
 	s := &http.Server{Handler: srv.guard(mux), ReadHeaderTimeout: 5 * time.Second}
 	return s.Serve(ln)
+}
+
+// browseURL turns the listener address into something a browser can
+// open: wildcard binds (0.0.0.0 / [::]) aren't dialable, so point the
+// browser at loopback on the same port.
+func browseURL(hostport string) string {
+	host, port, err := net.SplitHostPort(hostport)
+	if err != nil {
+		return "http://" + hostport + "/"
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {
+		host = "127.0.0.1"
+	}
+	return "http://" + net.JoinHostPort(host, port) + "/"
+}
+
+// openBrowser best-effort opens url in the default browser; a miss is
+// not an error worth failing the server over (the URL is printed).
+func openBrowser(url string) {
+	var c *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		c = exec.Command("open", url)
+	case "windows":
+		c = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		c = exec.Command("xdg-open", url)
+	}
+	c.Stdout, c.Stderr = nil, nil
+	if err := c.Start(); err != nil {
+		fmt.Fprintf(os.Stderr, "--open: %v\n", err)
+		return
+	}
+	go c.Wait() // reap; xdg-open returns quickly
 }
 
 type webServer struct {

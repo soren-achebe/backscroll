@@ -145,7 +145,7 @@ convention).
 	(same patterns as *redact*); *--no-redact* disables that. Register
 	with your client as command *backscroll*, args *mcp*.
 
-*serve* [*--addr* _host:port_] [*--redact*]
+*serve* [*--addr* _host:port_] [*--redact*] [*--open*]
 	Serve a local, read-only web UI for browsing and searching history:
 	search-as-you-type over commands and outputs (with grep-style
 	context lines around matches), ANSI colors rendered, one-click diff
@@ -156,7 +156,8 @@ convention).
 	self-contained page *export --format html* writes. Binds
 	to loopback only by default (_127.0.0.1:4133_) and rejects non-local
 	Host headers (DNS-rebinding guard). *--redact* masks secrets in
-	everything served (colors are lost on redacted output).
+	everything served (colors are lost on redacted output). *--open*
+	opens the UI in your default browser once listening.
 
 *off* / *on*
 	Pause / resume recording in the current session (in-band; no IPC).

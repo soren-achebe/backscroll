@@ -63,6 +63,8 @@ if (( $+functions[compdef] )); then
       fi
     elif [[ $words[2] == sync && CURRENT == 3 ]]; then
       compadd init export import status
+    elif [[ $words[2] == serve ]]; then
+      compadd -- --addr --redact --open
     elif [[ $words[2] == doctor ]]; then
       compadd -- --reindex
     elif [[ $words[2] == (list|last|search|pick|stats) ]]; then

@@ -467,3 +467,18 @@ func TestServeExportHTMLRedact(t *testing.T) {
 		t.Fatal("redacted export should be colorless")
 	}
 }
+
+func TestBrowseURL(t *testing.T) {
+	cases := map[string]string{
+		"127.0.0.1:4133": "http://127.0.0.1:4133/",
+		"0.0.0.0:4133":   "http://127.0.0.1:4133/",
+		"[::]:8080":      "http://127.0.0.1:8080/",
+		"[::1]:4133":     "http://[::1]:4133/",
+		"localhost:99":   "http://localhost:99/",
+	}
+	for in, want := range cases {
+		if got := browseURL(in); got != want {
+			t.Errorf("browseURL(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

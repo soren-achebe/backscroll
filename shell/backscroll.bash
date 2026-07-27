@@ -171,6 +171,8 @@ _backscroll_complete() {
     COMPREPLY=($(compgen -W "init export import status" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "doctor" ]; then
     COMPREPLY=($(compgen -W "--reindex" -- "$cur"))
+  elif [ "${COMP_WORDS[1]}" = "serve" ]; then
+    COMPREPLY=($(compgen -W "--addr --redact --open" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "list" ] || [ "${COMP_WORDS[1]}" = "last" ] || [ "${COMP_WORDS[1]}" = "search" ] || [ "${COMP_WORDS[1]}" = "pick" ] || [ "${COMP_WORDS[1]}" = "stats" ]; then
     case "$prev" in
       --by|-by)     COMPREPLY=($(compgen -W "cmd cwd exit host day" -- "$cur")) ;;

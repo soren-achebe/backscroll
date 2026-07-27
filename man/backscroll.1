@@ -186,7 +186,7 @@ Secrets are masked by default in everything handed to the client
 with your client as command \fBbackscroll\fR, args \fBmcp\fR.\&
 .P
 .RE
-\fBserve\fR [\fB--addr\fR \fIhost:port\fR] [\fB--redact\fR]
+\fBserve\fR [\fB--addr\fR \fIhost:port\fR] [\fB--redact\fR] [\fB--open\fR]
 .RS 4
 Serve a local, read-only web UI for browsing and searching history:
 search-as-you-type over commands and outputs (with grep-style
@@ -198,7 +198,8 @@ full-page.\& A download button saves any command as the same
 self-contained page \fBexport --format html\fR writes.\& Binds
 to loopback only by default (\fI127.\&0.\&0.\&1:4133\fR) and rejects non-local
 Host headers (DNS-rebinding guard).\& \fB--redact\fR masks secrets in
-everything served (colors are lost on redacted output).\&
+everything served (colors are lost on redacted output).\& \fB--open\fR
+opens the UI in your default browser once listening.\&
 .P
 .RE
 \fBoff\fR / \fBon\fR
