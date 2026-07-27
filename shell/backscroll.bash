@@ -169,6 +169,7 @@ _backscroll_complete() {
       *) case "$cur" in
            -*) local _bs_flags="-n --session --cwd --exit --since --host"
                [ "${COMP_WORDS[1]}" = "pick" ] && _bs_flags="$_bs_flags --pager --raw --print-id --print-cmd --redact"
+               [ "${COMP_WORDS[1]}" = "search" ] && _bs_flags="$_bs_flags -A -B -C --redact"
                COMPREPLY=($(compgen -W "$_bs_flags" -- "$cur")) ;;
          esac ;;
     esac

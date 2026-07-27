@@ -50,6 +50,10 @@ complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -l
 complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -l exit -d "only this exit code" -x -a "fail 0 1 2"
 complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -l since -d "only newer than (2h, 3d, 1w, date)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from list last search pick" -l host -d "only this synced host (local = this machine)" -x
+complete -c backscroll -n "__fish_seen_subcommand_from search" -s C -d "context lines around matches (grep -C)" -x
+complete -c backscroll -n "__fish_seen_subcommand_from search" -s A -d "lines after matches (grep -A)" -x
+complete -c backscroll -n "__fish_seen_subcommand_from search" -s B -d "lines before matches (grep -B)" -x
+complete -c backscroll -n "__fish_seen_subcommand_from search" -l redact -d "mask secrets in results"
 complete -c backscroll -n "__fish_seen_subcommand_from sync" -a "init export import status"
 complete -c backscroll -n "__fish_seen_subcommand_from doctor" -l reindex -d "rebuild the full-text search index"
 complete -c backscroll -n "__fish_seen_subcommand_from pick" -l pager -d "view output in a pager"

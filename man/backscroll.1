@@ -5,7 +5,7 @@
 .nh
 .ad l
 .\" Begin generated content:
-.TH "backscroll" "1" "2026-07-26"
+.TH "backscroll" "1" "2026-07-27"
 .P
 .SH NAME
 .P
@@ -82,10 +82,15 @@ command; \fB-2\fR is the one before last, and so on.\& \fB--raw\fR replays with
 colors; the default strips ANSI escapes.\&
 .P
 .RE
-\fBsearch\fR \fIquery\fR [\fIfilters\fR] [\fB--redact\fR]
+\fBsearch\fR \fIquery\fR [\fIfilters\fR] [\fB-C\fR \fIn\fR] [\fB-A\fR \fIn\fR] [\fB-B\fR \fIn\fR] [\fB--redact\fR]
 .RS 4
 Full-text search (SQLite FTS5, case-insensitive substring) over both
 command lines and outputs.\&
+.P
+\fB-C\fR \fIn\fR shows every matching output line with \fIn\fR lines of context
+before and after, line-numbered, like \fBgrep -C\fR (\fB-A\fR/\fB-B\fR set
+after/before independently; \fB-C 0\fR shows matching lines only).\&
+Without these flags each result shows a short snippet instead.\&
 .P
 .RE
 \fBpick\fR [\fIquery\fR] [\fIfilters\fR] [\fB--pager\fR] [\fB--raw\fR] [\fB--print-id\fR] [\fB--print-cmd\fR] [\fB--redact\fR]

@@ -349,3 +349,59 @@ func TestMCPMaxBytesTruncation(t *testing.T) {
 		}
 	}
 }
+
+func TestMCPSearchContextLines(t *testing.T) {
+	h := newMCPHarness(t, &mcpServer{st: mcpTestStore(t)})
+
+	// context_lines=1 around "--- FAIL: TestX" (line 2 of entry 3's output)
+	text, isErr := h.toolText("search_output",
+		map[string]any{"query": "FAIL: TestX", "context_lines": 1})
+	if isErr {
+		t.Fatalf("search ctx: %q", text)
+	}
+	for _, want := range []string{"1-FAIL\tproj\t0.29s", "2:--- FAIL: TestX", "3-PASS count dropped"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("ctx missing %q in %q", want, text)
+		}
+	}
+	// snippet path must NOT be used when context is requested
+	if strings.Contains(text, "…") {
+		t.Errorf("fts snippet leaked into context mode: %q", text)
+	}
+
+	// context_lines=0 → matching lines only
+	text, _ = h.toolText("search_output",
+		map[string]any{"query": "FAIL: TestX", "context_lines": 0})
+	if !strings.Contains(text, "2:--- FAIL: TestX") || strings.Contains(text, "1-FAIL") {
+		t.Errorf("ctx0: %q", text)
+	}
+
+	// omitted → snippet behaviour unchanged
+	text, _ = h.toolText("search_output", map[string]any{"query": "FAIL: TestX"})
+	if strings.Contains(text, "2:--- FAIL") {
+		t.Errorf("snippet mode should not number lines: %q", text)
+	}
+
+	// match in the command line only → headline still present, no hunks
+	text, isErr = h.toolText("search_output",
+		map[string]any{"query": "api.internal", "context_lines": 2})
+	if isErr || !strings.Contains(text, "curl api.internal/health") {
+		t.Errorf("cmd-only match: %v %q", isErr, text)
+	}
+}
+
+func TestMCPSearchContextRedact(t *testing.T) {
+	s := &mcpServer{st: mcpTestStore(t), redact: true, extra: redact.LoadExtra()}
+	h := newMCPHarness(t, s)
+	text, isErr := h.toolText("search_output",
+		map[string]any{"query": "token=", "context_lines": 2})
+	if isErr {
+		t.Fatalf("search: %q", text)
+	}
+	if strings.Contains(text, "ghp_abcdefghijklmnopqrstuvwxyz0123456789") {
+		t.Errorf("token leaked via context lines: %q", text)
+	}
+	if !strings.Contains(text, "token=") {
+		t.Errorf("non-secret context should survive: %q", text)
+	}
+}

@@ -295,3 +295,45 @@ func TestRebuildFTSBackfill(t *testing.T) {
 		t.Fatalf("pre-existing row lost by rebuild")
 	}
 }
+
+func TestPlain(t *testing.T) {
+	st := testStore(t)
+	sess, _ := st.NewSession("bash", "xterm")
+	now := time.Now()
+
+	// normal row: plain text stored at write time
+	if err := st.AddCommand(sess, "echo hi", "/tmp", 0, true, now, now.Add(time.Second),
+		[]byte("colored \x1b[31mred\x1b[0m text\n"), false, "colored red text\n"); err != nil {
+		t.Fatalf("AddCommand: %v", err)
+	}
+	got, err := st.Plain(1)
+	if err != nil || got != "colored red text\n" {
+		t.Fatalf("Plain(1)=%q err=%v", got, err)
+	}
+
+	// legacy row (pre-0.4, NULL plain_z): falls back to stripping raw
+	raw := st.enc.EncodeAll([]byte("legacy \x1b[32mgreen\x1b[0m out\n"), nil)
+	if _, err := st.db.Exec(`
+		INSERT INTO commands(session_id, cmd, cwd, exit_code, started_at, ended_at, output, output_bytes, truncated)
+		VALUES(?,?,?,?,?,?,?,?,0)`,
+		sess, "legacy", "/tmp", 0, now.UnixMilli(), now.UnixMilli(), raw, 25); err != nil {
+		t.Fatalf("legacy insert: %v", err)
+	}
+	got, err = st.Plain(2)
+	if err != nil || got != "legacy green out\n" {
+		t.Fatalf("Plain(legacy)=%q err=%v", got, err)
+	}
+
+	// empty output
+	if err := st.AddCommand(sess, "true", "/tmp", 0, true, now, now, nil, false, ""); err != nil {
+		t.Fatalf("AddCommand empty: %v", err)
+	}
+	if got, err := st.Plain(3); err != nil || got != "" {
+		t.Fatalf("Plain(empty)=%q err=%v", got, err)
+	}
+
+	// missing row
+	if _, err := st.Plain(999); err == nil {
+		t.Fatal("Plain(999) should error")
+	}
+}

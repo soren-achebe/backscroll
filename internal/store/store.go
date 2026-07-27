@@ -583,6 +583,31 @@ func (s *Store) Get(n int64) (*Command, error) {
 	return &c, nil
 }
 
+// Plain returns the ANSI-stripped text of a command's output — the same
+// text the FTS index sees (capped at ftsCap). Rows written by a pre-0.4
+// binary have no stored plain text; for those it falls back to stripping
+// the raw output on the fly.
+func (s *Store) Plain(id int64) (string, error) {
+	row := s.db.QueryRow(`SELECT coalesce(bks_unz(plain_z), ''), output FROM commands WHERE id=?`, id)
+	var plain string
+	var blob []byte
+	if err := row.Scan(&plain, &blob); err != nil {
+		return "", err
+	}
+	if plain == "" && len(blob) > 0 {
+		raw, err := s.dec.DecodeAll(blob, nil)
+		if err != nil {
+			return "", fmt.Errorf("decompress: %w", err)
+		}
+		p := ansi.Strip(raw)
+		if len(p) > ftsCap {
+			p = p[:ftsCap]
+		}
+		plain = string(p)
+	}
+	return plain, nil
+}
+
 func (s *Store) Search(query string, f Filter) ([]Command, error) {
 	where, fargs := f.where("c.")
 	extra := ""

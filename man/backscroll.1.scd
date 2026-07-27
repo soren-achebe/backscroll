@@ -62,9 +62,14 @@ adds the picker binding and tab completion, and both together are fine.
 	command; *-2* is the one before last, and so on. *--raw* replays with
 	colors; the default strips ANSI escapes.
 
-*search* _query_ [_filters_] [*--redact*]
+*search* _query_ [_filters_] [*-C* _n_] [*-A* _n_] [*-B* _n_] [*--redact*]
 	Full-text search (SQLite FTS5, case-insensitive substring) over both
 	command lines and outputs.
+
+	*-C* _n_ shows every matching output line with _n_ lines of context
+	before and after, line-numbered, like *grep -C* (*-A*/*-B* set
+	after/before independently; *-C 0* shows matching lines only).
+	Without these flags each result shows a short snippet instead.
 
 *pick* [_query_] [_filters_] [*--pager*] [*--raw*] [*--print-id*] [*--print-cmd*] [*--redact*]
 	Interactive fuzzy picker over recorded commands (requires *fzf*(1))

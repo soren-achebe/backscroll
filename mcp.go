@@ -203,6 +203,11 @@ var mcpTools = []map[string]any{
 					"description": "only commands from this synced machine ('local' = this machine)"},
 				"limit": map[string]any{"type": "integer",
 					"description": "max results (default 20, max 100)"},
+				"context_lines": map[string]any{"type": "integer",
+					"description": "instead of a short snippet, show every matching output line " +
+						"with this many lines of context before and after (grep -C style, " +
+						"with line numbers; 0 = matching lines only, max 10). Often avoids " +
+						"a follow-up get_output call."},
 			},
 			"required": []string{"query"},
 		},
@@ -378,7 +383,8 @@ func (s *mcpServer) headline(c store.Command) string {
 
 func (s *mcpServer) toolSearch(raw json.RawMessage) any {
 	var a struct {
-		Query string `json:"query"`
+		Query        string `json:"query"`
+		ContextLines *int   `json:"context_lines"`
 		mcpFilterArgs
 	}
 	if err := json.Unmarshal(raw, &a); err != nil {
@@ -401,11 +407,20 @@ func (s *mcpServer) toolSearch(raw json.RawMessage) any {
 	if len(cmds) == 0 {
 		return textResult("no recorded commands matched " + strconv.Quote(a.Query))
 	}
+	ctxLines := -1
+	if a.ContextLines != nil && *a.ContextLines >= 0 {
+		ctxLines = *a.ContextLines
+		if ctxLines > 10 {
+			ctxLines = 10
+		}
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "%d match(es), most recent first:\n\n", len(cmds))
 	for _, c := range cmds {
 		b.WriteString(s.headline(c))
-		if snip := strings.TrimSpace(string(ansi.Strip([]byte(c.Snippet)))); snip != "" {
+		if ctxLines >= 0 {
+			s.writeSearchContext(&b, c, a.Query, ctxLines)
+		} else if snip := strings.TrimSpace(string(ansi.Strip([]byte(c.Snippet)))); snip != "" {
 			for _, ln := range strings.Split(snip, "\n") {
 				b.WriteString("\n    " + s.red(ln))
 			}
@@ -414,6 +429,34 @@ func (s *mcpServer) toolSearch(raw json.RawMessage) any {
 	}
 	b.WriteString("Use get_output with an id to read a full output.")
 	return textResult(b.String())
+}
+
+// writeSearchContext appends grep -C style hunks (line-numbered, ':' on
+// matching lines, '-' on context lines) from the command's stored plain
+// output. Redaction runs on the whole text before matching.
+func (s *mcpServer) writeSearchContext(b *strings.Builder, c store.Command, query string, n int) {
+	const maxHunks = 5
+	text, err := s.st.Plain(c.ID)
+	if err != nil || text == "" {
+		return
+	}
+	text = s.red(text)
+	hunks, shown, total := grepContext(text, query, n, n, maxHunks)
+	for hi, h := range hunks {
+		if hi > 0 {
+			b.WriteString("\n    --")
+		}
+		for i, ln := range h.Lines {
+			sep := "-"
+			if h.IsMatch[i] {
+				sep = ":"
+			}
+			fmt.Fprintf(b, "\n    %d%s%s", h.Start+i+1, sep, clipLine(ln, matchOffset(ln, query), 500))
+		}
+	}
+	if total > shown {
+		fmt.Fprintf(b, "\n    (+%d more matching lines — get_output id %d for everything)", total-shown, c.ID)
+	}
 }
 
 func (s *mcpServer) toolList(raw json.RawMessage) any {

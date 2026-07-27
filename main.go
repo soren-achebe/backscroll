@@ -69,6 +69,8 @@ Usage:
   backscroll last [-n N]         alias for list
   backscroll search <query>      full-text search over commands + outputs
                                  (same filters as list: --cwd --exit --since)
+                                 -C/-A/-B N: grep-style context lines around
+                                 each matching output line (-C 0 = matches only)
   backscroll pick [query]        interactive fuzzy picker (needs fzf) with
                                  live output preview; enter = view output.
                                  --pager for tmux popups, --print-id,
@@ -451,6 +453,9 @@ func cmdSearch(args []string) error {
 	fs := flag.NewFlagSet("search", flag.ExitOnError)
 	n := fs.Int("n", 20, "max results")
 	doRedact := fs.Bool("redact", false, "mask secrets in displayed commands and snippets")
+	ctxC := fs.Int("C", -1, "show N lines of context around each matching output line (like grep -C)")
+	ctxA := fs.Int("A", -1, "show N lines after each matching output line (like grep -A)")
+	ctxB := fs.Int("B", -1, "show N lines before each matching output line (like grep -B)")
 	mkFilter := filterFlags(fs)
 	fs.Parse(args)
 	if fs.NArg() == 0 {
@@ -480,6 +485,14 @@ func cmdSearch(args []string) error {
 	if *doRedact {
 		extra = redact.LoadExtra()
 	}
+	ctxMode := *ctxC >= 0 || *ctxA >= 0 || *ctxB >= 0
+	before, after := *ctxB, *ctxA
+	if before < 0 {
+		before = max(*ctxC, 0)
+	}
+	if after < 0 {
+		after = max(*ctxC, 0)
+	}
 	for _, c := range res {
 		cmd, snip := c.Cmd, strings.TrimSpace(c.Snippet)
 		if *doRedact {
@@ -490,12 +503,50 @@ func cmdSearch(args []string) error {
 		}
 		fmt.Printf("\x1b[1m%5d\x1b[0m  %s  exit %s  %s\x1b[36m%s\x1b[0m\n",
 			c.ID, fmtAgo(c.StartedAt), exitStr(c), hostTag(c, true), oneLine(cmd, 70))
+		if ctxMode {
+			printSearchContext(st, c, query, before, after, *doRedact, extra)
+			continue
+		}
 		if snip != "" {
 			fmt.Printf("       %s\n", oneLine(snip, 100))
 		}
 	}
 	fmt.Printf("\n(%d results — `backscroll show <id>` for full output)\n", len(res))
 	return nil
+}
+
+// printSearchContext renders grep-style context hunks from a result's
+// stored plain output under its search headline (search -A/-B/-C).
+// Redaction runs on the whole text BEFORE matching and highlighting, so
+// highlight escapes can never split a secret past the redact patterns.
+func printSearchContext(st *store.Store, c store.Command, query string, before, after int, doRedact bool, extra []*regexp.Regexp) {
+	const maxHunks = 5
+	text, err := st.Plain(c.ID)
+	if err != nil || text == "" {
+		return
+	}
+	if doRedact {
+		text, _ = redact.String(text, extra)
+	}
+	hunks, shown, total := grepContext(text, query, before, after, maxHunks)
+	for hi, h := range hunks {
+		if hi > 0 {
+			fmt.Println("          \x1b[2m--\x1b[0m")
+		}
+		for i, ln := range h.Lines {
+			lineNo := h.Start + i + 1
+			if h.IsMatch[i] {
+				clipped := clipLine(ln, matchOffset(ln, query), 140)
+				fmt.Printf("       \x1b[32m%5d\x1b[0m:%s\n", lineNo,
+					highlightMatches(clipped, query, "\x1b[1;31m", "\x1b[0m"))
+			} else {
+				fmt.Printf("       \x1b[2m%5d-%s\x1b[0m\n", lineNo, clipLine(ln, 0, 140))
+			}
+		}
+	}
+	if total > shown {
+		fmt.Printf("       \x1b[2m(%d more matching lines — backscroll show %d | grep …)\x1b[0m\n", total-shown, c.ID)
+	}
 }
 
 func cmdStats() error {

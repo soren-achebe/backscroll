@@ -63,6 +63,7 @@ if (( $+functions[compdef] )); then
       elif [[ $words[CURRENT] == -* ]]; then
         local -a _bs_flags=(-n --session --cwd --exit --since --host)
         [[ $words[2] == pick ]] && _bs_flags+=(--pager --raw --print-id --print-cmd --redact)
+        [[ $words[2] == search ]] && _bs_flags+=(-A -B -C --redact)
         compadd -- $_bs_flags
       fi
     fi

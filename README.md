@@ -187,6 +187,7 @@ Release tarballs include a man page (`man/backscroll.1`; source is
 | `backscroll show -3` | third-most-recent command |
 | `backscroll show 3141` | by id · `--raw` keeps colors |
 | `backscroll search <text>` | full-text search commands + outputs |
+| `backscroll search -C 3 <text>` | …with 3 lines of context around every matching output line, like `grep -C` (`-A`/`-B` work too) |
 | `backscroll pick` | fuzzy-pick a command (fzf) with live output preview |
 | **Ctrl-X Ctrl-P** at the prompt | pick a past command and insert it at your cursor (current line becomes the query) |
 | `backscroll list -n 50` | recent commands with exit/duration/size |
@@ -280,7 +281,7 @@ server (stdio, zero dependencies), so an AI coding agent can answer
 *"what did that command print?"* from your recorded history instead of
 guessing — or re-running something expensive or destructive:
 
-- **search_output** — "find where the build first said `undefined symbol`"
+- **search_output** — "find where the build first said `undefined symbol`" (`context_lines` gives grep&nbsp;-C-style context around each hit)
 - **get_output** — the full output of any command (`-1` = your last one)
 - **list_commands** — recent history, e.g. failures only
 - **diff_output** — what changed vs. the previous run of the same command
