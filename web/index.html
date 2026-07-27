@@ -54,6 +54,11 @@ table.stats td { padding:5px 12px; border-bottom:1px solid var(--border); vertic
 table.stats td.num { text-align:right; color:var(--fg); white-space:nowrap; }
 table.stats td.key { overflow-wrap:anywhere; }
 table.stats .bar { color:var(--c6); letter-spacing:-1px; }
+table.stats tr.clk { cursor:pointer; }
+table.stats tr.clk:hover td { background:var(--row-hover, rgba(255,255,255,.04)); }
+#cwdchip { display:none; align-items:center; gap:4px; font-size:12px; color:var(--c6);
+  border:1px solid var(--border); border-radius:10px; padding:1px 8px; cursor:pointer;
+  max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .statnote { color:var(--dim); font-size:12px; text-align:center; padding:12px 0; }
 .body { border-top:1px solid var(--border); display:none; }
 .body.open { display:block; }
@@ -93,6 +98,7 @@ kbd { background:var(--panel2); border:1px solid var(--border); border-radius:4p
   <select id="exit"><option value="">all exits</option><option value="fail">failed</option><option value="0">exit 0</option></select>
   <select id="since"><option value="">any time</option><option value="1h">last hour</option><option value="1d">last day</option><option value="1w">last week</option></select>
   <select id="host" style="display:none"><option value="">all hosts</option></select>
+  <span id="cwdchip" title="click to clear this filter"></span>
   <select id="view"><option value="">history</option><option value="cmd">by command</option><option value="cwd">by directory</option><option value="exit">by exit</option><option value="host">by host</option><option value="day">by day</option></select>
   <span id="redacting">redacting</span>
   <span id="stats"></span>
@@ -102,7 +108,7 @@ kbd { background:var(--panel2); border:1px solid var(--border); border-radius:4p
 "use strict";
 const $ = s => document.querySelector(s);
 const list = $("#list"), q = $("#q");
-let timer = null, ctl = null;
+let timer = null, ctl = null, cwdFilter = "";
 
 function ago(ms) {
   if (!ms) return "?";
@@ -120,6 +126,7 @@ function dur(ms) {
   return (ms/3600000|0) + "h" + ((ms%3600000)/60000|0) + "m";
 }
 function esc(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function attr(s) { return esc(s).replace(/"/g,"&quot;"); }
 function kb(n) { return n < 1024 ? n + " B" : n < 1048576 ? (n/1024).toFixed(1) + " KB" : (n/1048576).toFixed(1) + " MB"; }
 
 async function refresh() {
@@ -127,6 +134,7 @@ async function refresh() {
   ctl = new AbortController();
   const p = new URLSearchParams();
   for (const id of ["exit","since","host"]) { const v = $("#"+id).value; if (v) p.set(id, v); }
+  if (cwdFilter) p.set("cwd", cwdFilter);
   const view = $("#view").value;
   q.disabled = !!view;
   if (view) return refreshStats(view, p);
@@ -172,7 +180,8 @@ async function refreshStats(view, p) {
     gs.map(g => {
       const pct = Math.round(g.fails * 100 / g.count);
       const bar = "█".repeat(Math.max(1, Math.round(g.count * 18 / max)));
-      return '<tr><td class="key">' + esc(g.key) + '</td>' +
+      const clk = g.raw ? ' class="clk" data-raw="' + attr(g.raw) + '" data-dim="' + view + '" title="show these commands"' : '';
+      return '<tr' + clk + '><td class="key">' + esc(g.key) + '</td>' +
         '<td class="num">' + g.count + '</td><td class="bar">' + bar + '</td>' +
         '<td class="num">' + (g.fails ? '<span class="exit-bad">' + pct + '%</span>' : '<span class="di">–</span>') + '</td>' +
         '<td class="num">' + (g.dur_ms > 0 ? dur(g.dur_ms) : '<span class="di">–</span>') + '</td></tr>';
@@ -224,7 +233,44 @@ async function toggle(row) {
   body.classList.add("open");
 }
 
+function setCwd(v) {
+  cwdFilter = v;
+  const chip = $("#cwdchip");
+  chip.style.display = v ? "inline-flex" : "none";
+  chip.textContent = v ? "in " + v + " ✕" : "";
+  refresh();
+}
+$("#cwdchip").onclick = () => setCwd("");
+
+function ensureOpt(sel, val, label) {
+  if (![...sel.options].some(o => o.value === val)) {
+    const o = document.createElement("option");
+    o.value = val; o.textContent = label;
+    sel.appendChild(o);
+  }
+}
+
+// A clickable breakdown row jumps back to history filtered to that group.
+function applyStatFilter(dim, raw) {
+  $("#view").value = "";
+  q.disabled = false;
+  if (dim === "cwd") { setCwd(raw); return; }
+  if (dim === "host") {
+    const sel = $("#host");
+    ensureOpt(sel, raw, raw);
+    sel.value = raw;
+    sel.style.display = "inline";
+  } else if (dim === "exit") {
+    const sel = $("#exit");
+    ensureOpt(sel, raw, raw === "0" ? "exit 0" : "exit " + raw);
+    sel.value = raw;
+  }
+  refresh();
+}
+
 list.addEventListener("click", e => {
+  const tr = e.target.closest("tr.clk");
+  if (tr) { applyStatFilter(tr.dataset.dim, tr.dataset.raw); return; }
   const head = e.target.closest(".rowhead");
   if (head) toggle(head.closest(".row"));
 });

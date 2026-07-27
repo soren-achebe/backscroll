@@ -383,6 +383,32 @@ type statJSON struct {
 	Count int    `json:"count"`
 	Fails int    `json:"fails"`
 	DurMs int64  `json:"dur_ms"`
+	// Raw is the unformatted group key for dimensions that map onto a
+	// /api/commands filter param (cwd, host, exit) — the UI uses it to
+	// make breakdown rows clickable. Omitted when the key is not
+	// filterable (cmd, day, "?" exits) or when --redact altered it
+	// (a redacted string would filter to nothing).
+	Raw string `json:"raw,omitempty"`
+}
+
+// statRawKey returns the filterable raw key for a breakdown row, or ""
+// when the row cannot be turned into a /api/commands filter.
+func statRawKey(dim, key string, redacting bool, extra []*regexp.Regexp) string {
+	switch dim {
+	case "cwd", "dir", "host":
+	case "exit":
+		if _, err := strconv.ParseInt(key, 10, 64); err != nil {
+			return "" // "?" — no exit recorded, not expressible as exit=N
+		}
+	default:
+		return ""
+	}
+	if redacting {
+		if red, _ := redact.String(key, extra); red != key {
+			return "" // redaction changed it; the raw value must not leak
+		}
+	}
+	return key
 }
 
 // breakdown serves /api/stats?by=cmd|cwd|exit|host|day scoped by the
@@ -421,7 +447,11 @@ func (s *webServer) breakdown(w http.ResponseWriter, dim string, q url.Values) {
 		if s.redact {
 			key, _ = redact.String(key, s.extra)
 		}
-		out = append(out, statJSON{Key: key, Count: g.count, Fails: g.fails, DurMs: g.dur.Milliseconds()})
+		out = append(out, statJSON{
+			Key: key, Count: g.count, Fails: g.fails,
+			DurMs: g.dur.Milliseconds(),
+			Raw:   statRawKey(dim, g.key, s.redact, s.extra),
+		})
 	}
 	writeJSON(w, map[string]any{
 		"by": dim, "groups": out, "total": len(cmds), "distinct": len(list),

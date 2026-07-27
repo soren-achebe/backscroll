@@ -316,3 +316,60 @@ func TestServeStatsBreakdown(t *testing.T) {
 		t.Fatalf("bogus dim: want 400, got %d", w.Code)
 	}
 }
+
+func TestServeStatsRawKeys(t *testing.T) {
+	_, h := newTestServer(t, false)
+
+	// cmd + day dims are not filterable — no raw key on any row
+	for _, dim := range []string{"cmd", "day"} {
+		_, body := get(t, h, "/api/stats?by="+dim)
+		for _, g := range body["groups"].([]any) {
+			if _, ok := g.(map[string]any)["raw"]; ok {
+				t.Fatalf("by=%s row unexpectedly has raw: %v", dim, g)
+			}
+		}
+	}
+
+	// exit/cwd/host rows carry the raw key that /api/commands accepts
+	_, body := get(t, h, "/api/stats?by=exit")
+	raws := map[string]bool{}
+	for _, g := range body["groups"].([]any) {
+		if r, ok := g.(map[string]any)["raw"].(string); ok {
+			raws[r] = true
+		}
+	}
+	if !raws["0"] || !raws["1"] {
+		t.Fatalf("exit raw keys: %v", raws)
+	}
+	_, body = get(t, h, "/api/stats?by=cwd")
+	if g := body["groups"].([]any)[0].(map[string]any); g["raw"] != "/tmp" {
+		t.Fatalf("cwd raw: %v", g)
+	}
+	_, body = get(t, h, "/api/stats?by=host")
+	if g := body["groups"].([]any)[0].(map[string]any); g["raw"] != "local" {
+		t.Fatalf("host raw: %v", g)
+	}
+
+	// round trip: the raw key really filters /api/commands
+	_, body = get(t, h, "/api/commands?exit=1")
+	if cs := body["commands"].([]any); len(cs) != 1 {
+		t.Fatalf("exit=1 round trip: %v", cs)
+	}
+}
+
+func TestStatRawKey(t *testing.T) {
+	if got := statRawKey("exit", "?", false, nil); got != "" {
+		t.Fatalf("'?' exit must not be filterable, got %q", got)
+	}
+	if got := statRawKey("cmd", "git", false, nil); got != "" {
+		t.Fatalf("cmd dim must not be filterable, got %q", got)
+	}
+	if got := statRawKey("cwd", "/tmp", true, nil); got != "/tmp" {
+		t.Fatalf("unredacted cwd should pass through, got %q", got)
+	}
+	// a key the redactor rewrites must NOT leak via raw
+	secret := "/home/x/AKIAIOSFODNN7EXAMPLE"
+	if got := statRawKey("cwd", secret, true, nil); got != "" {
+		t.Fatalf("redacted key leaked as raw: %q", got)
+	}
+}

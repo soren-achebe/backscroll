@@ -353,7 +353,9 @@ history:
   lines around them, grep-style (parity with `search -C`).
 - **Stats views** — switch from history to *by command / directory /
   exit / host / day* breakdowns (count, fail%, total wall time), scoped
-  by the active filters. `stats --by cmd --exit fail`, but clickable.
+  by the active filters. Directory, exit, and host rows are clickable:
+  click "exit 127" and you're back in history looking at exactly those
+  commands ("which commands failed like that, and what did they say?").
 - **Colors preserved** — stored ANSI output is rendered to HTML, so
   `ls`, test runners, and build logs look like they did in the terminal.
   Progress-bar spam (`\r` overwrites) collapses to its final state.
