@@ -8,6 +8,20 @@ if [[ -n "$BACKSCROLL_ACTIVE" && -z "$BACKSCROLL_HOOKED" ]]; then
   __bks_preexec() {
     # $1 = command text when invoked as a bash-preexec preexec function;
     # empty when invoked directly as a DEBUG trap.
+    # Capture $? first: on the first DEBUG fire after a recorded command
+    # finishes (BASH_COMMAND is a PROMPT_COMMAND fragment), it is the
+    # command's true exit status. __bks_precmd prefers this over its own
+    # $? because prompt frameworks that *wrap* PROMPT_COMMAND (starship
+    # replaces it and re-runs the old one via eval) reset $? to 0 before
+    # our precmd runs — starship 1.26's `if [[ -n $STARSHIP_PROMPT_COMMAND ]]`
+    # test defeats its own _starship_set_return. Without this, every
+    # failing command records as exit 0 when starship loads after us.
+    local __bks_fire_ec=$?
+    if [[ -n "$__bks_ec_pending" && -z "$__bks_at_prompt" && -n "$BASH_COMMAND" ]] &&
+       [[ "${PROMPT_COMMAND[*]}$__bks_pc_norm" == *"$BASH_COMMAND"* ]]; then
+      __bks_last_ec=$__bks_fire_ec
+      unset __bks_ec_pending
+    fi
     # Only fire for the first invocation after a prompt, and not for
     # completion or PROMPT_COMMAND itself.
     [[ -n "$COMP_LINE" ]] && return
@@ -62,12 +76,21 @@ if [[ -n "$BACKSCROLL_ACTIVE" && -z "$BACKSCROLL_HOOKED" ]]; then
     fi
     unset __bks_at_prompt
     __bks_ran_command=1
+    __bks_ec_pending=1
     printf '\033]6973;cmd=%s\007' "$(printf '%s' "$cmd" | base64 | tr -d '\n')"
     printf '\033]133;C\007'
   }
 
   __bks_precmd() {
     local ec=$?
+    # Prefer the exit captured by the DEBUG trap right when the command
+    # finished (see __bks_preexec) — $? here is unreliable under
+    # PROMPT_COMMAND-wrapping prompt frameworks.
+    if [[ -n "${__bks_last_ec+x}" ]]; then
+      ec=$__bks_last_ec
+      unset __bks_last_ec
+    fi
+    unset __bks_ec_pending
     if [[ -n "$__bks_ran_command" ]]; then
       printf '\033]133;D;%s\007' "$ec"
       unset __bks_ran_command

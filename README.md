@@ -349,6 +349,35 @@ and the whole thing is in the same static binary.
 | terminal scrollback | ✓ | until it isn't | ✗ | ✗ |
 | **backscroll** | ✓ | ✓ | ✓ (FTS5) | ✓ |
 
+## Plays well with your other tools
+
+backscroll is a recorder, not a prompt or a history manager — it's meant
+to run *alongside* whatever your shell already does. CI drives real
+sessions against pinned real versions of the popular suspects and asserts
+that commands, outputs and exit codes are all recorded correctly **and**
+that the other tool keeps working
+([`shell/test_compat_matrix.py`](shell/test_compat_matrix.py)):
+
+| tested with | bash | zsh | fish |
+|---|---|---|---|
+| [atuin](https://github.com/atuinsh/atuin) (incl. its Ctrl-R TUI) | ✓ | ✓ | ✓ |
+| [starship](https://github.com/starship/starship) (both load orders) | ✓ | ✓ | ✓ |
+| [zoxide](https://github.com/ajeetdsouza/zoxide) | ✓ | — | ✓ |
+| [direnv](https://github.com/direnv/direnv) | ✓ | — | — |
+| [oh-my-zsh](https://github.com/ohmyzsh/ohmyzsh) | | ✓ | |
+| [powerlevel10k](https://github.com/romkatv/powerlevel10k) (incl. instant prompt) | | ✓ | |
+| [bash-preexec](https://github.com/rcaloras/bash-preexec) (both load orders) | ✓ | | |
+| `bind -x` / zle widgets (fzf-style; atuin's real Ctrl-R above) | ✓ | ✓ | ✓ |
+
+One finding worth knowing about even if you don't use backscroll: with
+starship ≤ 1.26 on bash, anything that reads `$?` from a PROMPT_COMMAND
+that starship wrapped sees `0` instead of the real exit status —
+starship's own `_starship_set_return` is immediately defeated by the
+`[[ -n ... ]]` test that follows it. backscroll sidesteps this by
+capturing the true exit in its DEBUG trap before prompt frameworks run
+(starship's open [PR #7606](https://github.com/starship/starship/pull/7606)
+restructures the wrapping and would fix the general case).
+
 ## Overhead
 
 Measured on a modest 2-vCPU VM (AMD EPYC), median of repeated runs — run
