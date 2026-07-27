@@ -165,6 +165,7 @@ type cmdJSON struct {
 	Truncated bool   `json:"truncated"`
 	Host      string `json:"host,omitempty"` // synced origin; "" = local
 	Session   int64  `json:"session"`
+	Hist      bool   `json:"hist,omitempty"`    // shell-history import (no output exists)
 	Snippet   string `json:"snippet,omitempty"` // HTML with <mark>
 	Ctx       string `json:"ctx,omitempty"`     // HTML context hunks (search + ctx=N)
 }
@@ -173,6 +174,7 @@ func (s *webServer) toJSON(c store.Command) cmdJSON {
 	j := cmdJSON{
 		ID: c.ID, Cmd: c.Cmd, Cwd: c.Cwd, Bytes: c.OutputLen,
 		Truncated: c.Truncated, Host: c.Host, Session: c.SessionID, DurMs: -1,
+		Hist: strings.HasPrefix(c.Machine, "hist:"),
 	}
 	if s.redact {
 		j.Cmd, _ = redact.String(j.Cmd, s.extra)

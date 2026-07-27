@@ -215,7 +215,7 @@ function bodyHTML(d, perm) {
       (perm ? '<button class="plcopy">copy link</button>' : '<button class="open1">open ↗</button>') +
       '<button class="diff">diff vs previous run</button>' +
       '<button class="dl" title="save as a self-contained HTML page (full color, no assets)">download HTML</button>' +
-    '</div><pre>' + (d.html || '<span class="di">(no output)</span>') + '</pre>';
+    '</div><pre>' + (d.html || '<span class="di">' + (m.hist ? "(imported from shell history — no output was recorded)" : "(no output)") + '</span>') + '</pre>';
 }
 
 function wireBody(body, d, id) {
