@@ -789,3 +789,35 @@ func TestITerm2CurrentDirAndMetadataConsumed(t *testing.T) {
 		t.Fatalf("stored output = %q", s)
 	}
 }
+
+func TestWinPath(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"/C:/Users/soren", `C:\Users\soren`},
+		{"C:/Users/soren", `C:\Users\soren`},
+		{`C:\Users\soren`, `C:\Users\soren`},
+		{"/c:/tmp/a b", `c:\tmp\a b`},
+		{"/C:", `C:`},
+		{"/home/soren", "/home/soren"},
+		{"/home/C:ool", "/home/C:ool"},
+		{"relative/path", "relative/path"},
+		{"", ""},
+	}
+	for _, c := range cases {
+		if got := winPath(c.in); got != c.want {
+			t.Errorf("winPath(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestOSC99Cwd(t *testing.T) {
+	var cwd string
+	p := NewParser(Events{Cwd: func(s string) { cwd = s }})
+	p.Feed([]byte("\x1b]9;9;\"C:\\Users\\soren\"\x07"))
+	if cwd != `C:\Users\soren` {
+		t.Errorf("quoted OSC 9;9 cwd = %q", cwd)
+	}
+	p.Feed([]byte("\x1b]9;9;C:/Users/other\x07"))
+	if cwd != `C:\Users\other` {
+		t.Errorf("unquoted OSC 9;9 cwd = %q", cwd)
+	}
+}

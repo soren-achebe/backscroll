@@ -42,6 +42,8 @@ bash:	echo '\&eval "$(backscroll init bash)"'\& >> ~/.\&bashrc
 zsh:	echo '\&eval "$(backscroll init zsh)"'\& >> ~/.\&zshrc
 .br
 fish:	echo '\&backscroll init fish | source'\& >> ~/.\&config/fish/config.\&fish
+.br
+pwsh:	Add-Content $PROFILE '\&backscroll init pwsh | Out-String | Invoke-Expression'\&
 .P
 .RE
 Run \fBbackscroll doctor\fR to verify the setup.\&
@@ -65,7 +67,7 @@ shell so that bash reads \fI~/.\&bashrc\fR; pass \fB--login\fR for login-shell
 semantics (note that a login bash does not read \fI~/.\&bashrc\fR).\&
 .P
 .RE
-\fBinit\fR <\fBbash\fR|\fBzsh\fR|\fBfish\fR|\fBtmux\fR|\fBzellij\fR|\fBscreen\fR>
+\fBinit\fR <\fBbash\fR|\fBzsh\fR|\fBfish\fR|\fBpwsh\fR|\fBtmux\fR|\fBzellij\fR|\fBscreen\fR>
 .RS 4
 Print the shell-integration snippet (OSC 133 marks, cwd reporting,
 tab completion, and a \fBCtrl-X Ctrl-P\fR binding that opens \fBpick\fR and

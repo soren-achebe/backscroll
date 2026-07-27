@@ -51,6 +51,9 @@ var bashInit string
 //go:embed shell/backscroll.fish
 var fishInit string
 
+//go:embed shell/backscroll.ps1
+var pwshInit string
+
 //go:embed shell/backscroll.tmux
 var tmuxInit string
 
@@ -64,9 +67,11 @@ const usage = `backscroll — never lose a command's output again
 
 Usage:
   backscroll run                 start a recorded shell session
-  backscroll init <bash|zsh|fish> print shell-integration snippet
+  backscroll init <bash|zsh|fish|pwsh>
+                                 print shell-integration snippet
                                  (add: eval "$(backscroll init zsh)" to rc;
-                                  fish: backscroll init fish | source);
+                                  fish: backscroll init fish | source;
+                                  pwsh: backscroll init pwsh | Out-String | Invoke-Expression);
                                  also: init tmux|zellij|screen picker binds
   backscroll list [-n N]         recent commands; filter with --cwd DIR,
                                  --exit CODE|fail, --since 2h|3d|1w|DATE,
@@ -204,7 +209,7 @@ func cmdRun(args []string) error {
 
 func cmdInit(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: backscroll init <bash|zsh|fish|tmux|zellij|screen>")
+		return fmt.Errorf("usage: backscroll init <bash|zsh|fish|pwsh|tmux|zellij|screen>")
 	}
 	switch args[0] {
 	case "zsh":
@@ -213,6 +218,8 @@ func cmdInit(args []string) error {
 		fmt.Print(bashInit)
 	case "fish":
 		fmt.Print(fishInit)
+	case "pwsh", "powershell":
+		fmt.Print(pwshInit)
 	case "tmux":
 		fmt.Print(tmuxInit)
 	case "zellij":
@@ -220,7 +227,7 @@ func cmdInit(args []string) error {
 	case "screen":
 		fmt.Print(screenInit)
 	default:
-		return fmt.Errorf("unsupported target %q (bash, zsh, fish, tmux, zellij, screen)", args[0])
+		return fmt.Errorf("unsupported target %q (bash, zsh, fish, pwsh, tmux, zellij, screen)", args[0])
 	}
 	return nil
 }

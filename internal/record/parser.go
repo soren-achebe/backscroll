@@ -422,6 +422,13 @@ func (p *Parser) handleOSC(payload string, out *[]byte) {
 		if p.ev.Cwd != nil {
 			p.ev.Cwd(parseOSC7(payload[2:]))
 		}
+	case strings.HasPrefix(payload, "9;9;"):
+		// ConEmu / Windows Terminal cwd report: OSC 9;9;<path>, path
+		// optionally double-quoted. Emitted by Windows Terminal's
+		// recommended prompt integrations and by cmd's cd hooks.
+		if p.ev.Cwd != nil {
+			p.ev.Cwd(winPath(strings.Trim(payload[len("9;9;"):], `"`)))
+		}
 	default:
 		// Not ours: if we're capturing, put the sequence back into the
 		// captured output so replay stays faithful (e.g. title changes,
@@ -500,7 +507,25 @@ func parseOSC7(s string) string {
 	if i := strings.IndexByte(s, '/'); i >= 0 {
 		s = s[i:]
 	}
-	return percentDecode(s)
+	return winPath(percentDecode(s))
+}
+
+// winPath normalizes a Windows path that arrived URI-style: "/C:/Users/x"
+// (drive-letter path with a leading slash and forward slashes) becomes
+// `C:\Users\x`. Anything else — every Unix path — passes through
+// untouched: a real Unix directory literally named "/C:/" would be the
+// only casualty, and it does not occur in practice.
+func winPath(s string) string {
+	t := s
+	if len(t) >= 3 && t[0] == '/' && t[2] == ':' {
+		t = t[1:]
+	}
+	if len(t) >= 2 && t[1] == ':' &&
+		(t[0] >= 'A' && t[0] <= 'Z' || t[0] >= 'a' && t[0] <= 'z') &&
+		(len(t) == 2 || t[2] == '/' || t[2] == '\\') {
+		return strings.ReplaceAll(t, "/", "\\")
+	}
+	return s
 }
 
 // percentDecode undoes %XX percent-encoding, leaving malformed escapes as-is.
