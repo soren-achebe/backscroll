@@ -49,6 +49,7 @@ func newTestServer(t *testing.T, redactOn bool) (*webServer, http.Handler) {
 	mux.HandleFunc("/api/cmd/", srv.command)
 	mux.HandleFunc("/api/diff/", srv.diff)
 	mux.HandleFunc("/api/stats", srv.stats)
+	mux.HandleFunc("/export/", srv.exportOne)
 	return srv, srv.guard(mux)
 }
 
@@ -398,5 +399,71 @@ func TestStatRawKey(t *testing.T) {
 	secret := "/home/x/AKIAIOSFODNN7EXAMPLE"
 	if got := statRawKey("cwd", secret, true, nil); got != "" {
 		t.Fatalf("redacted key leaked as raw: %q", got)
+	}
+}
+
+func TestServeExportHTML(t *testing.T) {
+	srv, h := newTestServer(t, false)
+
+	w, _ := get(t, h, "/export/1.html")
+	if w.Code != 200 {
+		t.Fatalf("status %d", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
+		t.Fatalf("content-type %q", ct)
+	}
+	if cd := w.Header().Get("Content-Disposition"); cd != `attachment; filename="backscroll-1.html"` {
+		t.Fatalf("content-disposition %q", cd)
+	}
+	page := w.Body.String()
+	if !strings.Contains(page, "<!doctype html>") ||
+		!strings.Contains(page, "curl -s https://api.example.com/health") {
+		t.Fatalf("page missing pieces:\n%s", page)
+	}
+	if strings.Contains(page, "\x1b[") {
+		t.Fatal("raw ANSI leaked into export page")
+	}
+	// parity: byte-identical to what `export --format html` writes
+	c, err := srv.st.Get(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf strings.Builder
+	if err := exportHTML(&buf, []*store.Command{c}); err != nil {
+		t.Fatal(err)
+	}
+	if page != buf.String() {
+		t.Fatal("serve download differs from export --format html")
+	}
+
+	for path, want := range map[string]int{
+		"/export/999.html": 404,
+		"/export/1":        400,
+		"/export/x.html":   400,
+		"/export/":         400,
+	} {
+		if w, _ := get(t, h, path); w.Code != want {
+			t.Fatalf("%s: status %d, want %d", path, w.Code, want)
+		}
+	}
+}
+
+func TestServeExportHTMLRedact(t *testing.T) {
+	_, h := newTestServer(t, true)
+	w, _ := get(t, h, "/export/4.html")
+	page := w.Body.String()
+	if strings.Contains(page, "AKIAIOSFODNN7EXAMPLE") {
+		t.Fatalf("secret leaked:\n%s", page)
+	}
+	if !strings.Contains(page, "[REDACTED]") {
+		t.Fatal("expected [REDACTED] marker")
+	}
+	if strings.Contains(page, "<script>") {
+		t.Fatal("unescaped script tag")
+	}
+	// redaction runs on plain text: rendered output must carry no color spans
+	out := page[strings.Index(page, "<pre>"):]
+	if strings.Contains(out, `class="f`) {
+		t.Fatal("redacted export should be colorless")
 	}
 }

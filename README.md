@@ -373,6 +373,10 @@ history:
   full-page (untruncated output, absolute timestamp, copy-link button).
   Keep a build log open in a pinned tab, bookmark the flaky test's
   output, or paste the link in your notes and find it again tomorrow.
+- **Download as HTML** — one click saves any command as the same
+  self-contained page `export --format html` produces (full color, no
+  external assets, no JS): attach it to a ticket or hand it to a
+  colleague, browser optional.
 - **Local-only by design**: binds to `127.0.0.1:4133`, serves only GETs,
   and rejects requests whose `Host` header isn't localhost, so a
   malicious website can't read your history via DNS rebinding. If you

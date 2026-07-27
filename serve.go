@@ -58,6 +58,7 @@ func cmdServe(args []string) error {
 	mux.HandleFunc("/api/cmd/", srv.command)
 	mux.HandleFunc("/api/diff/", srv.diff)
 	mux.HandleFunc("/api/stats", srv.stats)
+	mux.HandleFunc("/export/", srv.exportOne)
 
 	fmt.Printf("backscroll web UI: \x1b[1mhttp://%s/\x1b[0m  (Ctrl-C to stop; read-only)\n", ln.Addr())
 	s := &http.Server{Handler: srv.guard(mux), ReadHeaderTimeout: 5 * time.Second}
@@ -316,6 +317,34 @@ func (s *webServer) command(w http.ResponseWriter, r *http.Request) {
 		html = ansihtml.Render(c.Output)
 	}
 	writeJSON(w, map[string]any{"meta": j, "html": html})
+}
+
+// exportOne serves /export/<id>.html — the same self-contained page
+// `export --format html` produces for that command, as a download.
+// Under --redact the output is redacted on plain text before rendering
+// (colors are lost, mirroring /api/cmd/): escape sequences inside raw
+// output could otherwise split a secret past the redact patterns.
+func (s *webServer) exportOne(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimPrefix(r.URL.Path, "/export/")
+	id, err := strconv.ParseInt(strings.TrimSuffix(name, ".html"), 10, 64)
+	if err != nil || !strings.HasSuffix(name, ".html") {
+		http.Error(w, "want /export/<id>.html", http.StatusBadRequest)
+		return
+	}
+	c, err := s.st.Get(id)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if s.redact {
+		c.Cmd, _ = redact.String(c.Cmd, s.extra)
+		red, _ := redact.Bytes(ansi.Strip(c.Output), s.extra)
+		c.Output = red
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Disposition",
+		fmt.Sprintf("attachment; filename=\"backscroll-%d.html\"", id))
+	exportHTML(w, []*store.Command{c})
 }
 
 func (s *webServer) diff(w http.ResponseWriter, r *http.Request) {

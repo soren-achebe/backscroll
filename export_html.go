@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"io"
 	"strings"
 
 	"github.com/soren-achebe/backscroll/internal/ansihtml"
@@ -14,7 +14,7 @@ import (
 // color (16/256/truecolor). Made for sharing — attach it to a ticket,
 // drop it in a paste site, or open it locally. Colors are always kept
 // (that is the point of the format), so --raw is a no-op here.
-func exportHTML(w *os.File, cmds []*store.Command) error {
+func exportHTML(w io.Writer, cmds []*store.Command) error {
 	title := oneLine(cmds[0].Cmd, 60)
 	if len(cmds) > 1 {
 		title += fmt.Sprintf(" (+%d more)", len(cmds)-1)
@@ -72,6 +72,6 @@ func exportHTML(w *os.File, cmds []*store.Command) error {
 
 	fmt.Fprintf(&b, "</main>\n<footer>exported with <a href=\"https://github.com/soren-achebe/backscroll\">backscroll</a> %s</footer>\n</body>\n</html>\n",
 		htmlEscape(version))
-	_, err := w.WriteString(b.String())
+	_, err := io.WriteString(w, b.String())
 	return err
 }

@@ -151,7 +151,8 @@ convention).
 	against the previous run of the same command, stats breakdowns
 	(by command, directory, exit, host or day) scoped by the active
 	filters, and per-command _#id_ permalinks that open one command
-	full-page. Binds
+	full-page. A download button saves any command as the same
+	self-contained page *export --format html* writes. Binds
 	to loopback only by default (_127.0.0.1:4133_) and rejects non-local
 	Host headers (DNS-rebinding guard). *--redact* masks secrets in
 	everything served (colors are lost on redacted output).

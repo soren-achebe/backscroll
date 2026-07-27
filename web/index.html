@@ -214,6 +214,7 @@ function bodyHTML(d, perm) {
       '<button class="copy">copy command</button>' +
       (perm ? '<button class="plcopy">copy link</button>' : '<button class="open1">open ↗</button>') +
       '<button class="diff">diff vs previous run</button>' +
+      '<button class="dl" title="save as a self-contained HTML page (full color, no assets)">download HTML</button>' +
     '</div><pre>' + (d.html || '<span class="di">(no output)</span>') + '</pre>';
 }
 
@@ -232,6 +233,10 @@ function wireBody(body, d, id) {
     ev.stopPropagation();
     navigator.clipboard.writeText(location.origin + location.pathname + "#" + id);
     ev.target.textContent = "copied ✓"; setTimeout(() => ev.target.textContent = "copy link", 1200);
+  };
+  body.querySelector(".dl").onclick = ev => {
+    ev.stopPropagation();
+    location.href = "/export/" + id + ".html"; // Content-Disposition makes it a download
   };
   body.querySelector(".diff").onclick = async ev => {
     ev.stopPropagation();
