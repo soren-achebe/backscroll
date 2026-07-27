@@ -48,7 +48,7 @@ if (( $+functions[compdef] )); then
     if (( CURRENT == 2 )); then
       compadd run init list last show search pick diff export sync stats prune delete redact mcp serve off on doctor version help
     elif [[ $words[2] == init ]]; then
-      compadd bash zsh fish tmux zellij
+      compadd bash zsh fish tmux zellij screen
     elif [[ $words[2] == export && $words[CURRENT-1] == (--format|-format) ]]; then
       compadd md cast json
     elif [[ $words[2] == export ]]; then

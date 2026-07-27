@@ -257,6 +257,12 @@ just decide which side of tmux you want it on:
   only). Append it to `~/.config/zellij/config.kdl` if you have no
   `keybinds` block yet; otherwise copy the two `bind` lines into your
   existing one (zellij ignores a second `keybinds` block).
+- **GNU screen:** record inside each window, and
+  `backscroll init screen >> ~/.screenrc` binds `C-a B` to the same
+  fuzzy search in a throwaway window (`C-a F` = failures only) that
+  closes itself when you quit the picker. Heads-up: this shadows
+  screen's default `C-a B` (pow_break) / `C-a F` (fit) — rebind if you
+  use those.
 - **Over SSH:** backscroll records on whichever machine the shell runs.
   Install it on the remote host and add the rc snippet there; use
   [sync](#cross-machine-sync) if you want the histories merged.

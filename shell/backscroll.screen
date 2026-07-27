@@ -1,0 +1,14 @@
+# backscroll GNU screen integration
+# Append to ~/.screenrc:   backscroll init screen >> ~/.screenrc
+# (needs fzf on your PATH)
+#
+# Note: these shadow screen's default C-a B (pow_break) and C-a F (fit).
+# If you use those, bind other keys — any `bind <key> screen -t backscroll
+# sh -c "backscroll pick --pager"` works.
+
+# C-a B — fuzzy-search every recorded command + output in a new window
+# (the window closes itself when you quit the picker)
+bind B screen -t backscroll sh -c "backscroll pick --pager"
+
+# C-a F — same, but only failed commands
+bind F screen -t backscroll sh -c "backscroll pick --pager --exit fail"

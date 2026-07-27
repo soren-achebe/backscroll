@@ -57,6 +57,9 @@ var tmuxInit string
 //go:embed shell/backscroll.kdl
 var zellijInit string
 
+//go:embed shell/backscroll.screen
+var screenInit string
+
 const usage = `backscroll — never lose a command's output again
 
 Usage:
@@ -64,7 +67,7 @@ Usage:
   backscroll init <bash|zsh|fish> print shell-integration snippet
                                  (add: eval "$(backscroll init zsh)" to rc;
                                   fish: backscroll init fish | source);
-                                 also: init tmux | init zellij popup binds
+                                 also: init tmux|zellij|screen picker binds
   backscroll list [-n N]         recent commands; filter with --cwd DIR,
                                  --exit CODE|fail, --since 2h|3d|1w|DATE,
                                  --session ID, --host NAME|local
@@ -201,7 +204,7 @@ func cmdRun(args []string) error {
 
 func cmdInit(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("usage: backscroll init <bash|zsh|fish|tmux|zellij>")
+		return fmt.Errorf("usage: backscroll init <bash|zsh|fish|tmux|zellij|screen>")
 	}
 	switch args[0] {
 	case "zsh":
@@ -214,8 +217,10 @@ func cmdInit(args []string) error {
 		fmt.Print(tmuxInit)
 	case "zellij":
 		fmt.Print(zellijInit)
+	case "screen":
+		fmt.Print(screenInit)
 	default:
-		return fmt.Errorf("unsupported target %q (bash, zsh, fish, tmux, zellij)", args[0])
+		return fmt.Errorf("unsupported target %q (bash, zsh, fish, tmux, zellij, screen)", args[0])
 	}
 	return nil
 }

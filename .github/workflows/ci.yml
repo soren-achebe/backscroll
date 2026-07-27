@@ -147,6 +147,11 @@ jobs:
           fi
           BKS_BIN="$PWD/backscroll" BKS_TEST_ZELLIJ="$HOME/.cache/zellij-0.44.3/zellij" \
             python3 shell/test_zellij.py
+      - name: E2E test of the GNU screen integration (C-a B/F picker binds)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y -qq screen fzf
+          BKS_BIN="$PWD/backscroll" python3 shell/test_screen.py
       - name: cache bash 3.2.57
         if: runner.os == 'Linux'
         uses: actions/cache@v4
