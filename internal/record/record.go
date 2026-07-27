@@ -4,19 +4,30 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
-	"os/signal"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
 
-	"github.com/creack/pty"
 	"golang.org/x/term"
 
 	"github.com/soren-achebe/backscroll/internal/ansi"
 	"github.com/soren-achebe/backscroll/internal/store"
 )
+
+// platformShell is a shell process attached to a pseudo-terminal — a real
+// PTY on Unix, a ConPTY on Windows. Reads return the terminal byte
+// stream; writes feed the user's keystrokes in.
+type platformShell interface {
+	io.ReadWriter
+	Close() error
+	Wait() error
+	// WatchResize keeps the inner terminal sized to the outer one and
+	// cols current (for echo reconstruction).
+	WatchResize(cols *atomic.Int32)
+	// WatchHangup arranges for a terminal-close/polite-kill to unwind
+	// through the normal read-loop path so pending output is flushed.
+	WatchHangup()
+}
 
 // capBuf keeps the first headCap bytes and the last tailCap bytes of a
 // stream, so huge outputs stay bounded but both the beginning and the
@@ -116,71 +127,35 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 	if os.Getenv("BACKSCROLL_ACTIVE") != "" {
 		return fmt.Errorf("already inside a backscroll session")
 	}
-	shell := os.Getenv("SHELL")
-	if shell == "" {
-		shell = "/bin/bash"
-	}
+	shell := defaultShell()
 
 	sessID, err := st.NewSession(shell, os.Getenv("TERM"))
 	if err != nil {
 		return err
 	}
 
-	// Plain interactive shell by default: an interactive non-login bash
-	// reads ~/.bashrc, which is where the README tells users to put the
-	// integration snippet. A login bash would skip it (silent no-record).
-	var cmd *exec.Cmd
-	if login {
-		cmd = exec.Command(shell, "-l")
-	} else {
-		cmd = exec.Command(shell)
-	}
-	cmd.Env = append(os.Environ(),
+	env := append(os.Environ(),
 		"BACKSCROLL_ACTIVE=1",
 		fmt.Sprintf("BACKSCROLL_SESSION=%d", sessID),
 	)
-
-	ptmx, err := pty.Start(cmd)
+	sh, err := spawnShell(shell, login, env)
 	if err != nil {
 		return err
 	}
-	defer ptmx.Close()
+	defer sh.Close()
 
-	// resize handling
 	var cols atomic.Int32 // terminal width, for echo reconstruction
-	winch := make(chan os.Signal, 1)
-	signal.Notify(winch, syscall.SIGWINCH)
-	go func() {
-		for range winch {
-			_ = pty.InheritSize(os.Stdin, ptmx)
-			if w, _, err := term.GetSize(int(os.Stdin.Fd())); err == nil {
-				cols.Store(int32(w))
-			}
-		}
-	}()
-	winch <- syscall.SIGWINCH
+	sh.WatchResize(&cols)
+	sh.WatchHangup()
 
-	// Terminal closed (SIGHUP) or polite kill (SIGTERM): forward the hangup
-	// to the shell. It kills its jobs and exits, the PTY slave closes, the
-	// read loop below gets EIO and unwinds through the normal path — so the
-	// pending command's partial output still gets flushed to the store.
-	// Closing the PTY after a grace period is the hard fallback in case the
-	// shell ignores the hangup.
-	hup := make(chan os.Signal, 1)
-	signal.Notify(hup, syscall.SIGHUP, syscall.SIGTERM)
-	go func() {
-		<-hup
-		_ = cmd.Process.Signal(syscall.SIGHUP)
-		time.Sleep(3 * time.Second)
-		_ = ptmx.Close()
-	}()
-
+	restoreVT := enableVT()
+	defer restoreVT()
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err == nil {
 		defer term.Restore(int(os.Stdin.Fd()), oldState)
 	}
 
-	go func() { _, _ = io.Copy(ptmx, os.Stdin) }()
+	go func() { _, _ = io.Copy(sh, os.Stdin) }()
 
 	// per-command state
 	var (
@@ -296,7 +271,7 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 
 	rbuf := make([]byte, 32*1024)
 	for {
-		n, rerr := ptmx.Read(rbuf)
+		n, rerr := sh.Read(rbuf)
 		if n > 0 {
 			if _, werr := os.Stdout.Write(rbuf[:n]); werr != nil {
 				break
@@ -316,7 +291,7 @@ func Run(st *store.Store, headCap, tailCap int, login bool) error {
 	}
 	flush(0, false)
 
-	err = cmd.Wait()
+	err = sh.Wait()
 	if oldState != nil {
 		_ = term.Restore(int(os.Stdin.Fd()), oldState)
 	}
