@@ -86,7 +86,10 @@ Usage:
                                  --format md (default: paste into an issue),
                                  cast (asciinema v2), json. --details folds
                                  long md output; -o FILE writes to a file
-  backscroll stats               database statistics
+  backscroll stats               database statistics; --by cmd|cwd|exit|host|day
+                                 breaks history down (counts, fail%, total
+                                 time), same filters as list — e.g.
+                                 stats --by cmd --exit fail --since 1w
   backscroll prune --older 30d   delete old entries
   backscroll delete <id>         delete one entry
   backscroll redact <id|-N ...>  permanently mask secrets (tokens, keys,
@@ -142,7 +145,7 @@ func main() {
 	case "export":
 		err = cmdExport(args)
 	case "stats":
-		err = cmdStats()
+		err = cmdStats(args)
 	case "prune":
 		err = cmdPrune(args)
 	case "delete":
@@ -553,31 +556,6 @@ func printSearchContext(st *store.Store, c store.Command, query string, before, 
 	if total > shown {
 		fmt.Printf("       \x1b[2m(%d more matching lines — backscroll show %d | grep …)\x1b[0m\n", total-shown, c.ID)
 	}
-}
-
-func cmdStats() error {
-	st, err := openStore()
-	if err != nil {
-		return err
-	}
-	defer st.Close()
-	s, err := st.Stats()
-	if err != nil {
-		return err
-	}
-	if s.Imported > 0 {
-		fmt.Printf("commands recorded : %d (%d synced from other machines)\n", s.Commands, s.Imported)
-	} else {
-		fmt.Printf("commands recorded : %d\n", s.Commands)
-	}
-	fmt.Printf("sessions          : %d\n", s.Sessions)
-	fmt.Printf("raw output stored : %s\n", humanBytes(s.RawBytes))
-	fmt.Printf("database size     : %s\n", humanBytes(s.DBBytes))
-	if !s.FirstAt.IsZero() {
-		fmt.Printf("oldest entry      : %s\n", s.FirstAt.Format("2006-01-02 15:04"))
-	}
-	fmt.Printf("database path     : %s\n", store.DefaultPath())
-	return nil
 }
 
 func parseDur(s string) (time.Duration, error) {

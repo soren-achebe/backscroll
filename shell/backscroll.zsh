@@ -65,8 +65,10 @@ if (( $+functions[compdef] )); then
       compadd init export import status
     elif [[ $words[2] == doctor ]]; then
       compadd -- --reindex
-    elif [[ $words[2] == (list|last|search|pick) ]]; then
-      if [[ $words[CURRENT-1] == (--exit|-exit) ]]; then
+    elif [[ $words[2] == (list|last|search|pick|stats) ]]; then
+      if [[ $words[CURRENT-1] == (--by|-by) ]]; then
+        compadd cmd cwd exit host day
+      elif [[ $words[CURRENT-1] == (--exit|-exit) ]]; then
         compadd fail 0 1 2
       elif [[ $words[CURRENT-1] == (--cwd|-cwd) ]]; then
         _files -/
@@ -74,6 +76,7 @@ if (( $+functions[compdef] )); then
         local -a _bs_flags=(-n --session --cwd --exit --since --host)
         [[ $words[2] == pick ]] && _bs_flags+=(--pager --raw --print-id --print-cmd --redact)
         [[ $words[2] == search ]] && _bs_flags+=(-A -B -C --redact)
+        [[ $words[2] == stats ]] && _bs_flags+=(--by)
         compadd -- $_bs_flags
       fi
     fi

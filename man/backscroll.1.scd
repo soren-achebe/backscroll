@@ -108,8 +108,18 @@ convention).
 	host (filter with *--host*). Set _$BACKSCROLL_HOST_ to override this
 	machine's advertised hostname. Design: _docs/sync-design.md_.
 
-*stats*
-	Database statistics.
+*stats* [*--by* _cmd_|_cwd_|_exit_|_host_|_day_] [*-n* _rows_]
+	Without flags: database statistics (counts, sizes, paths). With
+	*--by*, a breakdown of your history along one dimension — count,
+	failure rate and total wall time per group. *--by cmd* groups by
+	normalized command head (wrappers like _sudo_/_env_/_time_ and
+	VAR=val assignments are skipped; multi-tool CLIs keep their first
+	subcommand: "git push", not "git"), *--by cwd* by directory,
+	*--by exit* by exit code (signal names labeled), *--by host* by
+	origin machine (synced history), *--by day* as a per-day histogram.
+	The shared *list* filters scope the breakdown: *backscroll stats --by
+	cmd --exit fail --since 1w* is "what failed most this week". *-n*
+	caps the rows shown (default 15; 0 = all).
 
 *prune* *--older* _30d_
 	Delete entries older than the given age.

@@ -138,9 +138,19 @@ host (filter with \fB--host\fR).\& Set \fI$BACKSCROLL_HOST\fR to override this
 machine'\&s advertised hostname.\& Design: \fIdocs/sync-design.\&md\fR.\&
 .P
 .RE
-\fBstats\fR
+\fBstats\fR [\fB--by\fR \fIcmd\fR|\fIcwd\fR|\fIexit\fR|\fIhost\fR|\fIday\fR] [\fB-n\fR \fIrows\fR]
 .RS 4
-Database statistics.\&
+Without flags: database statistics (counts, sizes, paths).\& With
+\fB--by\fR, a breakdown of your history along one dimension — count,
+failure rate and total wall time per group.\& \fB--by cmd\fR groups by
+normalized command head (wrappers like \fIsudo\fR/\fIenv\fR/\fItime\fR and
+VAR=val assignments are skipped; multi-tool CLIs keep their first
+subcommand: "git push", not "git"), \fB--by cwd\fR by directory,
+\fB--by exit\fR by exit code (signal names labeled), \fB--by host\fR by
+origin machine (synced history), \fB--by day\fR as a per-day histogram.\&
+The shared \fBlist\fR filters scope the breakdown: \fBbackscroll stats --by
+cmd --exit fail --since 1w\fR is "what failed most this week".\& \fB-n\fR
+caps the rows shown (default 15; 0 = all).\&
 .P
 .RE
 \fBprune\fR \fB--older\fR \fI30d\fR

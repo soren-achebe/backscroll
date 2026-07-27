@@ -171,8 +171,9 @@ _backscroll_complete() {
     COMPREPLY=($(compgen -W "init export import status" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "doctor" ]; then
     COMPREPLY=($(compgen -W "--reindex" -- "$cur"))
-  elif [ "${COMP_WORDS[1]}" = "list" ] || [ "${COMP_WORDS[1]}" = "last" ] || [ "${COMP_WORDS[1]}" = "search" ] || [ "${COMP_WORDS[1]}" = "pick" ]; then
+  elif [ "${COMP_WORDS[1]}" = "list" ] || [ "${COMP_WORDS[1]}" = "last" ] || [ "${COMP_WORDS[1]}" = "search" ] || [ "${COMP_WORDS[1]}" = "pick" ] || [ "${COMP_WORDS[1]}" = "stats" ]; then
     case "$prev" in
+      --by|-by)     COMPREPLY=($(compgen -W "cmd cwd exit host day" -- "$cur")) ;;
       --exit|-exit) COMPREPLY=($(compgen -W "fail 0 1 2" -- "$cur")) ;;
       --cwd|-cwd)   COMPREPLY=($(compgen -d -- "$cur")) ;;
       --since|-since|--session|-session|--host|-host|-n) ;;
@@ -180,6 +181,7 @@ _backscroll_complete() {
            -*) local _bs_flags="-n --session --cwd --exit --since --host"
                [ "${COMP_WORDS[1]}" = "pick" ] && _bs_flags="$_bs_flags --pager --raw --print-id --print-cmd --redact"
                [ "${COMP_WORDS[1]}" = "search" ] && _bs_flags="$_bs_flags -A -B -C --redact"
+               [ "${COMP_WORDS[1]}" = "stats" ] && _bs_flags="$_bs_flags --by"
                COMPREPLY=($(compgen -W "$_bs_flags" -- "$cur")) ;;
          esac ;;
     esac
