@@ -224,6 +224,31 @@ The happy path is easy. The paths that cost real debugging:
   distinct guards — the full story is
   [gotcha #2 in osc133.md](osc133.md).
 
+## Windows: same sandwich, different bread
+
+On Windows the PTY is a [ConPTY](https://learn.microsoft.com/en-us/windows/console/pseudoconsoles)
+pseudoconsole: two anonymous pipes plus `CreatePseudoConsole`, and the
+shell is spawned with `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` in its
+proc-thread attribute list. The byte-stream contract is the same — the
+pseudoconsole renders the child's console API calls into VT sequences,
+and OSC marks pass through untouched — so the parser, store, and echo
+reconstruction are shared verbatim. Two hard-won specifics:
+
+- **`STARTF_USESTDHANDLES` (with NULL std handles) is mandatory** when
+  the parent itself has a console. Without it the child attaches its std
+  handles to the *parent's* console: output leaks to the outer console,
+  the ConPTY paints an empty frame, and input written to the ConPTY
+  never reaches the shell. The official ConPTY sample omits the flag
+  only because its parent has no console to leak to.
+- **Teardown is inverted.** A Unix PTY read returns EIO once the shell
+  exits; a ConPTY read blocks forever until `ClosePseudoConsole` runs.
+  So a waiter goroutine watches the process handle and closes the
+  pseudoconsole, which flushes pending output and *then* breaks the read
+  loop — the same flush-through-the-normal-path guarantee as the Unix
+  SIGHUP dance, driven from the opposite end. (There is no SIGWINCH
+  either; resize is a 500 ms poll, and no SIGHUP grace: closing the
+  console window kills the tree.)
+
 ## What it costs
 
 Measured on a 2-vCPU VM (methodology and harnesses in
