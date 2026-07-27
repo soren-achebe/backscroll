@@ -112,6 +112,14 @@ func spawnShell(shell string, login bool, env []string) (platformShell, error) {
 	si := new(windows.StartupInfoEx)
 	si.Cb = uint32(unsafe.Sizeof(*si))
 	si.ProcThreadAttributeList = attrs.List()
+	// CRITICAL, verified empirically on a console-having parent: without
+	// STARTF_USESTDHANDLES (with NULL std handles), the child attaches
+	// its std handles to the PARENT's console instead of the
+	// pseudoconsole — output leaks to the outer console, the ConPTY
+	// renders an empty frame, and input written to the ConPTY never
+	// reaches the shell. The official ConPTY sample omits this because
+	// its parent detaches from the console first.
+	si.Flags = windows.STARTF_USESTDHANDLES
 
 	argv, err := windows.UTF16PtrFromString(windows.EscapeArg(exe))
 	if err != nil {

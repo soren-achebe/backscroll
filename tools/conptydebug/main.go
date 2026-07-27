@@ -78,6 +78,7 @@ func variantOurs(withEnv bool) {
 	si := new(windows.StartupInfoEx)
 	si.Cb = uint32(unsafe.Sizeof(*si))
 	si.ProcThreadAttributeList = attrs.List()
+	si.Flags = windows.STARTF_USESTDHANDLES
 
 	argv, _ := windows.UTF16PtrFromString(windows.EscapeArg(exe))
 	flags := uint32(windows.EXTENDED_STARTUPINFO_PRESENT)
