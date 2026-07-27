@@ -1,0 +1,2 @@
+# byte-precise real-tool artifacts — CRLF conversion breaks the parsers under test
+internal/histimport/testdata/* -text
