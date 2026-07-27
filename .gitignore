@@ -8,3 +8,4 @@ dist/
 /server.json
 *.mcpb
 shell/__pycache__/
+*.exe
