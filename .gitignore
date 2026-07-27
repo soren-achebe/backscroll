@@ -7,3 +7,4 @@ dist/
 # generated at release time (mcpb/server.template.json is the source)
 /server.json
 *.mcpb
+shell/__pycache__/
