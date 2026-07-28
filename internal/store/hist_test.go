@@ -44,7 +44,9 @@ func TestHistTimelineOrdering(t *testing.T) {
 	sess, _ := st.NewSession("bash", "xterm")
 	now := time.Now().Truncate(time.Millisecond)
 	// a recent local command recorded BEFORE the import happens
-	add(t, st, sess, "echo recent", "out", 0, now)
+	// (its text shares "git push" with an imported row so one search
+	// below can assert relative ordering between the two)
+	add(t, st, sess, "echo git push demo", "out", 0, now)
 	// then a bulk import of week-old history (rows get HIGHER ids)
 	old := now.Add(-7 * 24 * time.Hour)
 	if _, err := st.AddHistory("hist:test", histEntries(old)); err != nil {
@@ -58,7 +60,7 @@ func TestHistTimelineOrdering(t *testing.T) {
 		t.Fatalf("got %d rows", len(cmds))
 	}
 	// timeline order: recent local first, no-timestamp entries last
-	if cmds[0].Cmd != "echo recent" {
+	if cmds[0].Cmd != "echo git push demo" {
 		t.Errorf("newest first, got %q", cmds[0].Cmd)
 	}
 	if cmds[3].Cmd != "ls -la" {
@@ -69,15 +71,15 @@ func TestHistTimelineOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Cmd != "echo recent" {
+	if c.Cmd != "echo git push demo" {
 		t.Errorf("Get(-1) = %q, want the recent local command", c.Cmd)
 	}
 	// search follows timeline order too
-	res, err := st.Search(`"git push" OR "echo recent"`, Filter{Limit: 10})
+	res, err := st.Search(`git push`, Filter{Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res) != 2 || res[0].Cmd != "echo recent" {
+	if len(res) != 2 || res[0].Cmd != "echo git push demo" {
 		t.Errorf("search order: %+v", res)
 	}
 }

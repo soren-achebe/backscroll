@@ -180,7 +180,7 @@ var mcpTools = []map[string]any{
 		"name":        "search_output",
 		"title":       "Search command outputs",
 		"annotations": roAnnotations("Search command outputs"),
-		"description": "Full-text search over recorded terminal commands AND their outputs — " +
+		"description": "Full-text search over recorded terminal commands, their outputs, and user notes — " +
 			"finds e.g. every command that ever printed 'connection refused'. " +
 			"Returns plain text, one block per match: id, time, cwd, exit code, the command " +
 			"line, and a snippet around the match (secrets are masked by default). " +
@@ -192,7 +192,7 @@ var mcpTools = []map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"query": map[string]any{"type": "string",
-					"description": "text to search for in command lines and outputs (substring match; case-insensitive)"},
+					"description": "text to search for in command lines, outputs and notes (substring match; case-insensitive)"},
 				"cwd": map[string]any{"type": "string",
 					"description": "only commands run in this directory or beneath it (absolute path, or '.' for the server's cwd)"},
 				"exit": map[string]any{"type": "string",
@@ -395,9 +395,13 @@ func (s *mcpServer) headline(c store.Command) string {
 	if strings.HasPrefix(c.Machine, "hist:") {
 		hist = "\n(imported from shell history — no output was recorded)"
 	}
-	return fmt.Sprintf("id %d · %s · cwd %s · exit %s%s · %s%s\n$ %s%s",
+	note := ""
+	if c.Note != "" {
+		note = "\nnote: " + s.red(c.Note)
+	}
+	return fmt.Sprintf("id %d · %s · cwd %s · exit %s%s · %s%s\n$ %s%s%s",
 		c.ID, fmtWhen(c.StartedAt), c.Cwd, exitStr(c),
-		took, humanBytes(c.OutputLen), from, s.red(c.Cmd), hist)
+		took, humanBytes(c.OutputLen), from, s.red(c.Cmd), hist, note)
 }
 
 func (s *mcpServer) toolSearch(raw json.RawMessage) any {
@@ -416,10 +420,7 @@ func (s *mcpServer) toolSearch(raw json.RawMessage) any {
 	if err != nil {
 		return errResult("%v", err)
 	}
-	// trigram tokenizer: quote so natural strings (hyphens, dots, FTS
-	// operators) search literally — same treatment as `backscroll search`.
-	q := `"` + strings.ReplaceAll(a.Query, `"`, `""`) + `"`
-	cmds, err := s.st.Search(q, f)
+	cmds, err := s.st.Search(a.Query, f)
 	if err != nil {
 		return errResult("search failed: %v", err)
 	}
@@ -439,7 +440,8 @@ func (s *mcpServer) toolSearch(raw json.RawMessage) any {
 		b.WriteString(s.headline(c))
 		if ctxLines >= 0 {
 			s.writeSearchContext(&b, c, a.Query, ctxLines)
-		} else if snip := strings.TrimSpace(string(ansi.Strip([]byte(c.Snippet)))); snip != "" {
+		} else if snip := strings.TrimSpace(string(ansi.Strip([]byte(c.Snippet)))); snip != "" &&
+			!strings.HasPrefix(snip, "note: ") { // note matches: headline already shows the note
 			for _, ln := range strings.Split(snip, "\n") {
 				b.WriteString("\n    " + s.red(ln))
 			}

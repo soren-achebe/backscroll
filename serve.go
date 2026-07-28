@@ -168,16 +168,18 @@ type cmdJSON struct {
 	Hist      bool   `json:"hist,omitempty"`    // shell-history import (no output exists)
 	Snippet   string `json:"snippet,omitempty"` // HTML with <mark>
 	Ctx       string `json:"ctx,omitempty"`     // HTML context hunks (search + ctx=N)
+	Note      string `json:"note,omitempty"`    // user annotation
 }
 
 func (s *webServer) toJSON(c store.Command) cmdJSON {
 	j := cmdJSON{
 		ID: c.ID, Cmd: c.Cmd, Cwd: c.Cwd, Bytes: c.OutputLen,
 		Truncated: c.Truncated, Host: c.Host, Session: c.SessionID, DurMs: -1,
-		Hist: strings.HasPrefix(c.Machine, "hist:"),
+		Hist: strings.HasPrefix(c.Machine, "hist:"), Note: c.Note,
 	}
 	if s.redact {
 		j.Cmd, _ = redact.String(j.Cmd, s.extra)
+		j.Note, _ = redact.String(j.Note, s.extra)
 	}
 	if c.ExitCode.Valid {
 		v := c.ExitCode.Int64
@@ -267,15 +269,18 @@ func (s *webServer) commands(w http.ResponseWriter, r *http.Request) {
 
 	var out []cmdJSON
 	if qs := strings.TrimSpace(q.Get("q")); qs != "" {
-		fq := `"` + strings.ReplaceAll(qs, `"`, `""`) + `"`
-		res, err := s.st.Search(fq, f)
+		res, err := s.st.Search(qs, f)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		for _, c := range res {
 			j := s.toJSON(c)
-			j.Snippet = s.snippetHTML(strings.TrimSpace(c.Snippet))
+			// note matches carry a synthetic "note: …" snippet; the note
+			// itself is already rendered on the row, so skip the snippet.
+			if !strings.HasPrefix(c.Snippet, "note: ") {
+				j.Snippet = s.snippetHTML(strings.TrimSpace(c.Snippet))
+			}
 			if ctxN > 0 {
 				j.Ctx = s.ctxHTML(c, qs, ctxN)
 			}

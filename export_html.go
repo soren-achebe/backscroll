@@ -33,6 +33,7 @@ func exportHTML(w io.Writer, cmds []*store.Command) error {
 	b.WriteString(".hdr{padding:10px 14px 0;font-weight:700;white-space:pre-wrap;word-break:break-word;}\n")
 	b.WriteString(".hdr .p{color:var(--ok);user-select:none;}\n")
 	b.WriteString(".meta{padding:4px 14px 10px;color:var(--dim);font-size:12px;border-bottom:1px solid var(--border);}\n")
+	b.WriteString(".note{padding:6px 14px 0;color:#d4b106;font-size:12px;}\n")
 	b.WriteString(".meta .ok{color:var(--ok)} .meta .bad{color:var(--bad)}\n")
 	b.WriteString("pre{margin:0;padding:12px 14px;overflow-x:auto;tab-size:8;}\n")
 	b.WriteString("footer{max-width:980px;margin:0 auto;padding:0 16px 24px;color:var(--dim);font-size:12px;}\n")
@@ -63,6 +64,9 @@ func exportHTML(w io.Writer, cmds []*store.Command) error {
 			meta = append(meta, "output truncated")
 		}
 		fmt.Fprintf(&b, "<div class=\"meta\">%s</div>\n", strings.Join(meta, " · "))
+		if c.Note != "" {
+			fmt.Fprintf(&b, "<div class=\"note\">\u270e %s</div>\n", htmlEscape(c.Note))
+		}
 
 		out := strings.TrimRight(ansihtml.Render(c.Output), "\n")
 		if out == "" {

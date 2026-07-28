@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -91,7 +92,7 @@ func TestSearch(t *testing.T) {
 	add(t, st, sess, "curl svc", "connection refused by host\n", 7, now.Add(-2*time.Minute))
 	add(t, st, sess, "make build", "all targets up to date\n", 0, now.Add(-time.Minute))
 
-	res, err := st.Search(`"connection refused"`, Filter{Limit: 10})
+	res, err := st.Search(`connection refused`, Filter{Limit: 10})
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -102,7 +103,7 @@ func TestSearch(t *testing.T) {
 		t.Error("Search returned empty snippet")
 	}
 
-	res, err = st.Search(`"no such phrase anywhere"`, Filter{Limit: 10})
+	res, err = st.Search(`no such phrase anywhere`, Filter{Limit: 10})
 	if err != nil {
 		t.Fatalf("Search(miss): %v", err)
 	}
@@ -144,10 +145,10 @@ func TestUpdateOutputAndFTS(t *testing.T) {
 	if string(c.Output) != "secret sauce [REDACTED]\n" {
 		t.Errorf("output after update = %q", c.Output)
 	}
-	if res, _ := st.Search(`"ABC123"`, Filter{Limit: 10}); len(res) != 0 {
+	if res, _ := st.Search(`ABC123`, Filter{Limit: 10}); len(res) != 0 {
 		t.Errorf("old text still findable in FTS after UpdateOutput: %+v", res)
 	}
-	if res, _ := st.Search(`"REDACTED"`, Filter{Limit: 10}); len(res) != 1 {
+	if res, _ := st.Search(`REDACTED`, Filter{Limit: 10}); len(res) != 1 {
 		t.Errorf("new text not findable in FTS after UpdateOutput")
 	}
 }
@@ -165,7 +166,7 @@ func TestPruneAndDelete(t *testing.T) {
 	if n != 1 {
 		t.Errorf("Prune removed %d, want 1", n)
 	}
-	if res, _ := st.Search(`"old out"`, Filter{Limit: 10}); len(res) != 0 {
+	if res, _ := st.Search(`old out`, Filter{Limit: 10}); len(res) != 0 {
 		t.Error("pruned entry still in FTS")
 	}
 	if _, err := st.Get(2); err != nil {
@@ -178,7 +179,7 @@ func TestPruneAndDelete(t *testing.T) {
 	if _, err := st.Get(2); err == nil {
 		t.Error("Get(2) after Delete: want error")
 	}
-	if res, _ := st.Search(`"new out"`, Filter{Limit: 10}); len(res) != 0 {
+	if res, _ := st.Search(`new out`, Filter{Limit: 10}); len(res) != 0 {
 		t.Error("deleted entry still in FTS")
 	}
 }
@@ -253,7 +254,7 @@ func TestListFilters(t *testing.T) {
 	want("limit", Filter{Limit: 2}, 4, 3)
 
 	// same filters through Search
-	res, err := st.Search(`"out"`, Filter{Cwd: "/src/app", Failed: true, Limit: 10})
+	res, err := st.Search(`out`, Filter{Cwd: "/src/app", Failed: true, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,13 +281,13 @@ func TestRebuildFTSBackfill(t *testing.T) {
 		t.Fatalf("legacy insert: %v", err)
 	}
 
-	if got, _ := st.Search(`"needle-xyz"`, Filter{}); len(got) != 0 {
+	if got, _ := st.Search(`needle-xyz`, Filter{}); len(got) != 0 {
 		t.Fatalf("expected no hits before rebuild, got %d", len(got))
 	}
 	if err := st.RebuildFTS(); err != nil {
 		t.Fatalf("RebuildFTS: %v", err)
 	}
-	got, err := st.Search(`"needle-xyz"`, Filter{})
+	got, err := st.Search(`needle-xyz`, Filter{})
 	if err != nil || len(got) != 1 {
 		t.Fatalf("after rebuild: hits=%d err=%v", len(got), err)
 	}
@@ -294,7 +295,7 @@ func TestRebuildFTSBackfill(t *testing.T) {
 		t.Fatalf("wrong row: %+v", got[0])
 	}
 	// ANSI must have been stripped during backfill.
-	if got, _ := st.Search(`"regular row"`, Filter{}); len(got) != 1 {
+	if got, _ := st.Search(`regular row`, Filter{}); len(got) != 1 {
 		t.Fatalf("pre-existing row lost by rebuild")
 	}
 }
@@ -338,5 +339,86 @@ func TestPlain(t *testing.T) {
 	// missing row
 	if _, err := st.Plain(999); err == nil {
 		t.Fatal("Plain(999) should error")
+	}
+}
+
+func TestNotes(t *testing.T) {
+	st := testStore(t)
+	sess, _ := st.NewSession("bash", "xterm")
+	now := time.Now().Truncate(time.Millisecond)
+	add(t, st, sess, "kubectl rollout undo deploy/api", "deployment.apps/api rolled back\n", 0, now.Add(-2*time.Minute)) // id 1
+	add(t, st, sess, "make test", "FAIL: TestFoo\n", 2, now.Add(-time.Minute))                                           // id 2
+
+	if err := st.SetNote(1, "The Fix for the outage"); err != nil {
+		t.Fatalf("SetNote: %v", err)
+	}
+	// note comes back on every read path
+	if c, _ := st.Get(1); c.Note != "The Fix for the outage" {
+		t.Errorf("Get note = %q", c.Note)
+	}
+	cmds, _ := st.List(Filter{Limit: 10})
+	if cmds[1].Note != "The Fix for the outage" || cmds[0].Note != "" {
+		t.Errorf("List notes = %q / %q", cmds[1].Note, cmds[0].Note)
+	}
+
+	// search matches note text, case-insensitive, with a highlighted snippet
+	res, err := st.Search("the fix", Filter{Limit: 10})
+	if err != nil {
+		t.Fatalf("Search(note): %v", err)
+	}
+	if len(res) != 1 || res[0].ID != 1 {
+		t.Fatalf("Search(note) = %+v, want id 1", res)
+	}
+	if want := "note: \x1b[1;31mThe Fix\x1b[0m for the outage"; res[0].Snippet != want {
+		t.Errorf("note snippet = %q, want %q", res[0].Snippet, want)
+	}
+
+	// a query matching both FTS and the note must not duplicate the row
+	if err := st.SetNote(1, "rolled back by hand"); err != nil {
+		t.Fatal(err)
+	}
+	res, _ = st.Search("rolled back", Filter{Limit: 10})
+	if len(res) != 1 || res[0].ID != 1 {
+		t.Fatalf("dedup: got %d results %+v", len(res), res)
+	}
+	// FTS snippet wins over the synthetic note snippet
+	if len(res) > 0 && strings.HasPrefix(res[0].Snippet, "note:") {
+		t.Errorf("FTS match should keep its output snippet, got %q", res[0].Snippet)
+	}
+
+	// filters apply to note matches too
+	if res, _ := st.Search("rolled back by hand", Filter{Failed: true, Limit: 10}); len(res) != 0 {
+		t.Errorf("note match ignored --exit fail filter: %+v", res)
+	}
+
+	// clearing
+	if err := st.SetNote(1, ""); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := st.Get(1); c.Note != "" {
+		t.Errorf("note not cleared: %q", c.Note)
+	}
+	if res, _ := st.Search("by hand", Filter{Limit: 10}); len(res) != 0 {
+		t.Errorf("cleared note still matches: %+v", res)
+	}
+	// unknown id errors
+	if err := st.SetNote(9999, "x"); err == nil {
+		t.Error("SetNote(9999) should fail")
+	}
+}
+
+func TestNoteLikeEscaping(t *testing.T) {
+	st := testStore(t)
+	sess, _ := st.NewSession("bash", "xterm")
+	add(t, st, sess, "true", "nothing interesting\n", 0, time.Now())
+	if err := st.SetNote(1, "50% done"); err != nil {
+		t.Fatal(err)
+	}
+	// '%' and '_' in the query must match literally, not as wildcards
+	if res, _ := st.Search("0% d", Filter{Limit: 10}); len(res) != 1 {
+		t.Errorf("literal %% search failed")
+	}
+	if res, _ := st.Search("5_%", Filter{Limit: 10}); len(res) != 0 {
+		t.Errorf("wildcard leaked into note search: %+v", res)
 	}
 }

@@ -52,6 +52,9 @@ main { max-width:1100px; margin:0 auto; padding:12px 16px 60px; }
 .snip { padding:0 13px 9px 4.8em; color:var(--dim); font-size:12px;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .snip mark { background:transparent; color:var(--mark); font-weight:700; }
+.notel { padding:0 13px 6px 4.8em; color:#d4b106; font-size:12px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.notel mark { background:transparent; color:var(--mark); font-weight:700; }
 .ctxpre { margin:0; padding:2px 13px 9px 4.8em; font-size:12px; max-height:240px;
   overflow:auto; white-space:pre; }
 .ctxpre mark { background:transparent; color:var(--mark); font-weight:700; }
@@ -174,6 +177,7 @@ async function refresh() {
         (c.host ? '<span class="host">[' + esc(c.host) + ']</span>' : '') +
         '<span class="meta">' + ago(c.started_at) + (dur(c.dur_ms) ? " · " + dur(c.dur_ms) : "") + '</span>' +
       '</div>' +
+      (c.note ? '<div class="notel" title="note">\u270e ' + esc(c.note) + '</div>' : '') +
       (c.ctx ? '<pre class="ctxpre">' + c.ctx + '</pre>'
              : c.snippet ? '<div class="snip">' + c.snippet + '</div>' : '') +
       '<div class="body"></div></div>';
@@ -414,7 +418,9 @@ async function permView(id) {
         '<span class="cmd">' + esc(m.cmd) + '</span>' +
         (m.host ? '<span class="host">[' + esc(m.host) + ']</span>' : '') +
         '<span class="meta">' + ago(m.started_at) + (dur(m.dur_ms) ? " · " + dur(m.dur_ms) : "") + '</span>' +
-      '</div><div class="body open"></div></div>';
+      '</div>' +
+      (m.note ? '<div class="notel" title="note">\u270e ' + esc(m.note) + '</div>' : '') +
+      '<div class="body open"></div></div>';
   const body = list.querySelector(".body");
   body.innerHTML = bodyHTML(d, true);
   wireBody(body, d, m.id);

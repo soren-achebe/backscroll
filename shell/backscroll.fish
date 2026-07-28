@@ -41,7 +41,7 @@ end
 
 # Tab completion (active in and out of recorded sessions).
 complete -c backscroll -f
-complete -c backscroll -n __fish_use_subcommand -a "run exec init list last show search pick diff export import sync stats prune delete redact mcp serve off on doctor version help"
+complete -c backscroll -n __fish_use_subcommand -a "run exec init list last show search pick diff export import sync stats note prune delete redact mcp serve off on doctor version help"
 complete -c backscroll -n "__fish_seen_subcommand_from init" -a "bash zsh fish pwsh tmux zellij screen"
 complete -c backscroll -n "__fish_seen_subcommand_from exec" -l quiet -d "record only, no passthrough"
 complete -c backscroll -n "__fish_seen_subcommand_from exec" -l head-cap -d "max bytes kept from start of output" -x
@@ -76,3 +76,4 @@ complete -c backscroll -n "__fish_seen_subcommand_from serve" -l open -d "open t
 complete -c backscroll -n "__fish_seen_subcommand_from pick" -l pager -d "view output in a pager"
 complete -c backscroll -n "__fish_seen_subcommand_from pick" -l print-id -d "print only the selected id"
 complete -c backscroll -n "__fish_seen_subcommand_from pick" -l print-cmd -d "print only the command line"
+complete -c backscroll -n "__fish_seen_subcommand_from note" -l rm -d "remove the note"

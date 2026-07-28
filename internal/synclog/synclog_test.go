@@ -159,7 +159,7 @@ func TestExportImportE2E(t *testing.T) {
 			t.Fatalf("secret left the machine: %q", c.Cmd)
 		}
 	}
-	found, err := stB.Search(`"echo one"`, store.Filter{})
+	found, err := stB.Search(`echo one`, store.Filter{})
 	if err != nil || len(found) != 1 {
 		t.Fatalf("search imported: %v %+v", err, found)
 	}
@@ -189,7 +189,7 @@ func TestExportImportE2E(t *testing.T) {
 	if err != nil || machines[0].Imported != 1 {
 		t.Fatalf("incremental import: %+v err=%v", machines, err)
 	}
-	if found, _ := stB.Search(`"topsecret"`, store.Filter{}); len(found) != 0 {
+	if found, _ := stB.Search(`topsecret`, store.Filter{}); len(found) != 0 {
 		t.Fatalf("ignored command was synced: %+v", found)
 	}
 

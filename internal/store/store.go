@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -138,6 +139,14 @@ var migrations = [][]string{
 		   tokenize='trigram')`,
 		`INSERT INTO commands_fts(commands_fts) VALUES('rebuild')`,
 	},
+	// v4: user notes ("this is the one that fixed it"). Notes are small
+	// and sparse, so they are searched with a case-insensitive substring
+	// scan instead of joining the trigram index — the migration is a
+	// single instant ALTER and older binaries (which name every column
+	// they touch) keep working on the migrated DB.
+	{
+		`ALTER TABLE commands ADD COLUMN note TEXT`,
+	},
 }
 
 func migrate(db *sql.DB) error {
@@ -245,6 +254,7 @@ type Command struct {
 	Machine   string // origin machine id; "" = recorded locally
 	Host      string // origin hostname; "" = recorded locally
 	OriginSeq int64  // per-origin-machine sequence; 0 = local
+	Note      string // user annotation ("" = none)
 }
 
 // Local reports whether the command was recorded on this machine (as
@@ -444,7 +454,7 @@ func scanCmd(rows *sql.Rows) (Command, error) {
 	var c Command
 	var st, en, oseq sql.NullInt64
 	err := rows.Scan(&c.ID, &c.SessionID, &c.Cmd, &c.Cwd, &c.ExitCode, &st, &en, &c.OutputLen, &c.Truncated,
-		&c.Machine, &c.Host, &oseq)
+		&c.Machine, &c.Host, &oseq, &c.Note)
 	if st.Valid && st.Int64 > 0 { // 0 = unknown (shell-history import)
 		c.StartedAt = time.UnixMilli(st.Int64)
 	}
@@ -457,7 +467,7 @@ func scanCmd(rows *sql.Rows) (Command, error) {
 	return c, err
 }
 
-const cmdCols = `id, session_id, cmd, coalesce(cwd,''), exit_code, started_at, ended_at, output_bytes, truncated, coalesce(machine,''), coalesce(host,''), origin_seq`
+const cmdCols = `id, session_id, cmd, coalesce(cwd,''), exit_code, started_at, ended_at, output_bytes, truncated, coalesce(machine,''), coalesce(host,''), origin_seq, coalesce(note,'')`
 
 // Filter narrows List/Search results. Zero values mean "no filter".
 type Filter struct {
@@ -572,7 +582,7 @@ func (s *Store) Get(n int64) (*Command, error) {
 	var st, en, oseq sql.NullInt64
 	var blob []byte
 	err := row.Scan(&c.ID, &c.SessionID, &c.Cmd, &c.Cwd, &c.ExitCode, &st, &en, &c.OutputLen, &c.Truncated,
-		&c.Machine, &c.Host, &oseq, &blob)
+		&c.Machine, &c.Host, &oseq, &c.Note, &blob)
 	if err != nil {
 		return nil, err
 	}
@@ -619,17 +629,26 @@ func (s *Store) Plain(id int64) (string, error) {
 	return plain, nil
 }
 
+// Search matches query against command lines and outputs (trigram FTS)
+// plus user notes (case-insensitive substring). query is the raw user
+// string — quoting for the FTS tokenizer happens here. Snippets carry
+// SGR escapes (bold red) around matches; note matches get a synthetic
+// "note: …" snippet with the same markers.
 func (s *Store) Search(query string, f Filter) ([]Command, error) {
+	// trigram tokenizer: quote so natural strings (hyphens, dots, FTS
+	// operators) search literally.
+	fq := `"` + strings.ReplaceAll(query, `"`, `""`) + `"`
 	where, fargs := f.where("c.")
 	extra := ""
 	if where != "" {
 		extra = " AND " + strings.TrimPrefix(where, " WHERE ")
 	}
-	args := append([]any{query}, fargs...)
+	args := append([]any{fq}, fargs...)
 	args = append(args, f.limit())
 	rows, err := s.db.Query(`
 		SELECT c.id, c.session_id, c.cmd, coalesce(c.cwd,''), c.exit_code, c.started_at, c.ended_at,
 		       c.output_bytes, c.truncated, coalesce(c.machine,''), coalesce(c.host,''), c.origin_seq,
+		       coalesce(c.note,''),
 		       snippet(commands_fts, 1, char(27)||'[1;31m', char(27)||'[0m', '…', 12)
 		FROM commands_fts JOIN commands c ON c.id = commands_fts.rowid
 		WHERE commands_fts MATCH ?`+extra+`
@@ -639,11 +658,12 @@ func (s *Store) Search(query string, f Filter) ([]Command, error) {
 	}
 	defer rows.Close()
 	var out []Command
+	seen := map[int64]bool{}
 	for rows.Next() {
 		var c Command
 		var st, en, oseq sql.NullInt64
 		if err := rows.Scan(&c.ID, &c.SessionID, &c.Cmd, &c.Cwd, &c.ExitCode, &st, &en,
-			&c.OutputLen, &c.Truncated, &c.Machine, &c.Host, &oseq, &c.Snippet); err != nil {
+			&c.OutputLen, &c.Truncated, &c.Machine, &c.Host, &oseq, &c.Note, &c.Snippet); err != nil {
 			return nil, err
 		}
 		if st.Valid && st.Int64 > 0 {
@@ -655,9 +675,108 @@ func (s *Store) Search(query string, f Filter) ([]Command, error) {
 		if oseq.Valid {
 			c.OriginSeq = oseq.Int64
 		}
+		seen[c.ID] = true
+		out = append(out, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	notes, err := s.searchNotes(query, f)
+	if err != nil {
+		return nil, err
+	}
+	added := false
+	for _, c := range notes {
+		if !seen[c.ID] {
+			out = append(out, c)
+			added = true
+		}
+	}
+	if added {
+		sort.Slice(out, func(i, j int) bool {
+			if !out[i].StartedAt.Equal(out[j].StartedAt) {
+				return out[i].StartedAt.After(out[j].StartedAt)
+			}
+			return out[i].ID > out[j].ID
+		})
+		if len(out) > f.limit() {
+			out = out[:f.limit()]
+		}
+	}
+	return out, nil
+}
+
+// searchNotes finds commands whose note contains query (case-insensitive)
+// and gives them a highlighted "note: …" snippet.
+func (s *Store) searchNotes(query string, f Filter) ([]Command, error) {
+	where, fargs := f.where("")
+	cond := `note IS NOT NULL AND note LIKE ? ESCAPE '\'`
+	if where == "" {
+		where = " WHERE " + cond
+	} else {
+		where += " AND " + cond
+	}
+	args := append(fargs, "%"+likeEscape(query)+"%", f.limit())
+	rows, err := s.db.Query(`SELECT `+cmdCols+` FROM commands`+where+
+		` ORDER BY started_at DESC, id DESC LIMIT ?`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Command
+	for rows.Next() {
+		c, err := scanCmd(rows)
+		if err != nil {
+			return nil, err
+		}
+		c.Snippet = "note: " + highlightSub(c.Note, query, "\x1b[1;31m", "\x1b[0m")
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// highlightSub wraps every case-insensitive occurrence of sub in text
+// with the given markers.
+func highlightSub(text, sub, on, off string) string {
+	if sub == "" {
+		return text
+	}
+	lower, lsub := strings.ToLower(text), strings.ToLower(sub)
+	if len(lower) != len(text) || len(lsub) != len(sub) {
+		// Unicode case folding changed byte offsets; match exact case.
+		lower, lsub = text, sub
+	}
+	var b strings.Builder
+	i := 0
+	for {
+		j := strings.Index(lower[i:], lsub)
+		if j < 0 {
+			b.WriteString(text[i:])
+			return b.String()
+		}
+		j += i
+		b.WriteString(text[i:j])
+		b.WriteString(on)
+		b.WriteString(text[j : j+len(sub)])
+		b.WriteString(off)
+		i = j + len(sub)
+	}
+}
+
+// SetNote sets (or clears, with "") the user annotation on a command.
+func (s *Store) SetNote(id int64, note string) error {
+	var v any
+	if note != "" {
+		v = note
+	}
+	res, err := s.db.Exec(`UPDATE commands SET note=? WHERE id=?`, v, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("no entry with id %d", id)
+	}
+	return nil
 }
 
 type Stats struct {

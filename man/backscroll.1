@@ -201,6 +201,17 @@ showing \fIwhen\fR that group ran (entries imported from shell history
 without timestamps are left out).\&
 .P
 .RE
+\fBnote\fR [\fIid\fR|\fB-N\fR] [\fItext\fR .\&.\&.\&] | [\fB--rm\fR]
+.RS 4
+Attach a note to a stored command ("this is the one that fixed it").\&
+Defaults to the last command; give an id or a \fB-N\fR offset to target
+an older one.\& Notes appear in \fBlist\fR, \fBshow\fR, \fBsearch\fR results, the
+web UI and exports, and are searchable (\fBsearch\fR matches notes as
+well as commands and outputs).\& Without text the current note is
+printed; \fB--rm\fR removes it.\& Notes stay local: they are not carried
+along by \fBsync\fR exports.\&
+.P
+.RE
 \fBprune\fR \fB--older\fR \fI30d\fR
 .RS 4
 Delete entries older than the given age.\&

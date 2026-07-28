@@ -299,6 +299,7 @@ notes: [docs/history-files.md](docs/history-files.md).)
 | `... --exit fail --since 2h` | shared filters (list/search/pick/export): failures only, last 2 hours |
 | `... --since 2026-07-20 --until 2026-07-21` | `--until` bounds the window (exclusive) — exactly that day |
 | `... --cwd .` | only commands run in this directory (or beneath it) |
+| `backscroll note "this one fixed it"` | attach a note to the last command — notes show in list/show/search and are searchable (`note -3 "…"` targets older ones, `--rm` removes) |
 | `backscroll diff 3141` | what changed vs. the **previous run of the same command** |
 | `backscroll diff -2 -1` | unified diff of any two stored outputs (`-U n` context) |
 | `backscroll export -1` | command + output as a markdown block, ready to paste into an issue (`--details` folds it) |

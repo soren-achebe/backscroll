@@ -103,7 +103,7 @@ func TestAddImportedIdempotent(t *testing.T) {
 	}
 
 	// Imported text must be searchable, and only stored once.
-	res, err := st.Search(`"laptop 6.1"`, Filter{})
+	res, err := st.Search(`laptop 6.1`, Filter{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -203,7 +203,7 @@ func TestExecSearchable(t *testing.T) {
 	if code, rerr := runExec(st, sh("echo certbot renewal FAILED for example.org"), 1024, 1024, true, &out, &errw); code != 0 || rerr != nil {
 		t.Fatalf("code=%d err=%v", code, rerr)
 	}
-	res, err := st.Search(`"renewal FAILED"`, store.Filter{})
+	res, err := st.Search(`renewal FAILED`, store.Filter{})
 	if err != nil {
 		t.Fatal(err)
 	}

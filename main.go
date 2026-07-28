@@ -108,6 +108,10 @@ Usage:
                                  breaks history down (counts, fail%, total
                                  time), same filters as list — e.g.
                                  stats --by cmd --exit fail --since 1w
+  backscroll note [id|-N] <text> attach a note to a command ("this is the
+                                 one that fixed it"); notes show up in
+                                 list/show/search and are searchable.
+                                 No text prints the note, --rm removes it
   backscroll prune --older 30d   delete old entries
   backscroll delete <id>         delete one entry
   backscroll redact <id|-N ...>  permanently mask secrets (tokens, keys,
@@ -170,6 +174,8 @@ func main() {
 		err = cmdStats(args)
 	case "prune":
 		err = cmdPrune(args)
+	case "note":
+		err = cmdNote(args)
 	case "delete":
 		err = cmdDelete(args)
 	case "redact":
@@ -449,6 +455,13 @@ func cmdList(args []string) error {
 			line = "\x1b[31m" + line + "\x1b[0m"
 		}
 		fmt.Println(line)
+		if c.Note != "" {
+			n := "       ✎ " + oneLine(c.Note, 100)
+			if color {
+				n = "\x1b[33m" + n + "\x1b[0m"
+			}
+			fmt.Println(n)
+		}
 	}
 	return nil
 }
@@ -523,7 +536,9 @@ func cmdShow(args []string) error {
 		return fmt.Errorf("not found (%v)", err)
 	}
 	if *doRedact {
-		c.Cmd, _ = redact.String(c.Cmd, redact.LoadExtra())
+		extra := redact.LoadExtra()
+		c.Cmd, _ = redact.String(c.Cmd, extra)
+		c.Note, _ = redact.String(c.Note, extra)
 	}
 	if !*quiet {
 		fmt.Printf("\x1b[1m$ %s\x1b[0m\n", c.Cmd)
@@ -542,6 +557,9 @@ func cmdShow(args []string) error {
 		if strings.HasPrefix(c.Machine, "hist:") {
 			fmt.Printf("\x1b[2m# imported from shell history (%s) — no output was recorded\x1b[0m\n",
 				strings.TrimPrefix(c.Machine, "hist:"))
+		}
+		if c.Note != "" {
+			fmt.Printf("\x1b[33m# note: %s\x1b[0m\n", c.Note)
 		}
 	}
 	out := c.Output
@@ -572,8 +590,6 @@ func cmdSearch(args []string) error {
 		return fmt.Errorf("usage: backscroll search <query> [flags]")
 	}
 	query := strings.Join(posArgs, " ")
-	// trigram tokenizer: quote the query so users can type natural strings
-	q := `"` + strings.ReplaceAll(query, `"`, `""`) + `"`
 	st, err := openStore()
 	if err != nil {
 		return err
@@ -583,7 +599,7 @@ func cmdSearch(args []string) error {
 	if err != nil {
 		return err
 	}
-	res, err := st.Search(q, f)
+	res, err := st.Search(query, f)
 	if err != nil {
 		return err
 	}
@@ -691,6 +707,71 @@ func cmdPrune(args []string) error {
 	return nil
 }
 
+// cmdNote attaches a searchable annotation to a stored command:
+//
+//	backscroll note "this fixed it"        → note on the last command
+//	backscroll note -3 "the broken run"    → note on the 3rd-from-last
+//	backscroll note 1052 "keeper"          → note by absolute id
+//	backscroll note 1052                   → print the note
+//	backscroll note 1052 --rm              → remove it
+func cmdNote(args []string) error {
+	rm := false
+	target := int64(-1)
+	targetSet := false
+	var words []string
+	for _, a := range args {
+		switch {
+		case a == "--rm" || a == "-rm":
+			rm = true
+		case a == "--help" || a == "-h":
+			fmt.Println("usage: backscroll note [id|-N] [text ...] | --rm")
+			return nil
+		case !targetSet && len(words) == 0 && isIntArg(a):
+			n, _ := strconv.ParseInt(a, 10, 64)
+			target = n
+			targetSet = true
+		default:
+			words = append(words, a)
+		}
+	}
+	st, err := openStore()
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	c, err := st.Get(target)
+	if err != nil {
+		return fmt.Errorf("not found (%v)", err)
+	}
+	switch {
+	case rm:
+		if err := st.SetNote(c.ID, ""); err != nil {
+			return err
+		}
+		fmt.Printf("removed note from entry %d\n", c.ID)
+	case len(words) == 0:
+		if c.Note == "" {
+			fmt.Printf("entry %d has no note (add one: backscroll note %d \"text\")\n", c.ID, c.ID)
+		} else {
+			fmt.Println(c.Note)
+		}
+	default:
+		note := strings.Join(words, " ")
+		if err := st.SetNote(c.ID, note); err != nil {
+			return err
+		}
+		fmt.Printf("noted entry %d (%s): %s\n", c.ID, oneLine(c.Cmd, 40), note)
+	}
+	return nil
+}
+
+// isIntArg reports whether a parses as a (possibly negative) integer —
+// an id or -N offset rather than note text.
+func isIntArg(a string) bool {
+	_, err := strconv.ParseInt(a, 10, 64)
+	return err == nil
+}
+
 func cmdDelete(args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("usage: backscroll delete <id>")
@@ -744,7 +825,8 @@ func cmdRedact(args []string) error {
 		}
 		newCmd, hitsCmd := redact.String(c.Cmd, extra)
 		newOut, hitsOut := redact.Bytes(c.Output, extra)
-		hits := hitsCmd + hitsOut
+		newNote, hitsNote := redact.String(c.Note, extra)
+		hits := hitsCmd + hitsOut + hitsNote
 		if hits == 0 {
 			fmt.Printf("entry %d: nothing to redact\n", c.ID)
 			continue
@@ -756,6 +838,11 @@ func cmdRedact(args []string) error {
 		plain := string(ansi.Strip(newOut))
 		if err := st.UpdateOutput(c.ID, newCmd, newOut, plain); err != nil {
 			return fmt.Errorf("entry %d: %v", c.ID, err)
+		}
+		if hitsNote > 0 {
+			if err := st.SetNote(c.ID, newNote); err != nil {
+				return fmt.Errorf("entry %d: %v", c.ID, err)
+			}
 		}
 		fmt.Printf("entry %d: masked %d secret(s)\n", c.ID, hits)
 	}

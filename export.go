@@ -88,6 +88,7 @@ func cmdExport(args []string) error {
 		for _, c := range cmds {
 			c.Cmd, _ = redact.String(c.Cmd, extra)
 			c.Output, _ = redact.Bytes(c.Output, extra)
+			c.Note, _ = redact.String(c.Note, extra)
 		}
 	}
 
@@ -190,6 +191,9 @@ func exportMarkdown(w *os.File, cmds []*store.Command, details, raw bool) error 
 		if c.Truncated {
 			meta += " · output truncated"
 		}
+		if c.Note != "" {
+			meta += " · note: " + oneLine(c.Note, 120)
+		}
 		if details {
 			fmt.Fprintf(w, "<details>\n<summary><code>%s</code> — %s</summary>\n\n",
 				htmlEscape(oneLine(c.Cmd, 90)), meta)
@@ -279,6 +283,7 @@ func exportJSON(w *os.File, cmds []*store.Command, raw bool) error {
 		EndedAt    string `json:"ended_at"`
 		DurationMS int64  `json:"duration_ms"`
 		Truncated  bool   `json:"truncated"`
+		Note       string `json:"note,omitempty"`
 		Output     string `json:"output"`
 	}
 	recs := make([]rec, 0, len(cmds))
@@ -289,6 +294,7 @@ func exportJSON(w *os.File, cmds []*store.Command, raw bool) error {
 			EndedAt:    c.EndedAt.Format("2006-01-02T15:04:05Z07:00"),
 			DurationMS: c.EndedAt.Sub(c.StartedAt).Milliseconds(),
 			Truncated:  c.Truncated,
+			Note:       c.Note,
 			Output:     string(exportOutput(c, raw)),
 		}
 		if c.ExitCode.Valid {

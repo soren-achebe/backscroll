@@ -163,6 +163,15 @@ convention).
 	showing _when_ that group ran (entries imported from shell history
 	without timestamps are left out).
 
+*note* [_id_|*-N*] [_text_ ...] | [*--rm*]
+	Attach a note to a stored command ("this is the one that fixed it").
+	Defaults to the last command; give an id or a *-N* offset to target
+	an older one. Notes appear in *list*, *show*, *search* results, the
+	web UI and exports, and are searchable (*search* matches notes as
+	well as commands and outputs). Without text the current note is
+	printed; *--rm* removes it. Notes stay local: they are not carried
+	along by *sync* exports.
+
 *prune* *--older* _30d_
 	Delete entries older than the given age.
 

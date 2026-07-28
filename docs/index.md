@@ -67,6 +67,9 @@ command capture. Full details in the
   intact.
 - **`diff`** — what changed between this run and the previous run of the
   same command.
+- **`note`** — pin a searchable annotation to any command: `backscroll
+  note "this is the one that fixed it"` — it shows up in list, search,
+  the web UI and exports.
 - **`pick`** — fzf-style fuzzy picker with live output preview, bound to
   ++ctrl+x++ ++ctrl+p++ in bash/zsh/fish, plus tmux/zellij/screen popups.
 - **`stats`** — failure rates, wall-time totals, and activity sparklines
