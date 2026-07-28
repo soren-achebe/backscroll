@@ -86,6 +86,14 @@ command capture. Full details in the
 Local-only by design: no cloud, no telemetry, secret redaction built in.
 One static Go binary for Linux, macOS, and Windows.
 
+## How it compares
+
+- [vs. atuin, asciinema, `script`, and scrollback](comparison.md) —
+  command recorders vs. session recorders, and the gap backscroll fills.
+- [Compatibility matrix](compatibility.md) — terminals with zero-config
+  recording, shells, prompt frameworks, and multiplexers, all CI-tested
+  against pinned real versions.
+
 ## Guides
 
 Deep dives written while building backscroll — everything empirically

@@ -34,6 +34,9 @@ theme:
 
 nav:
   - Home: index.md
+  - Compare & compatibility:
+      - vs. atuin, asciinema, script: comparison.md
+      - Compatibility matrix: compatibility.md
   - Guides:
       - "OSC 133: a practical guide": osc133.md
       - Anatomy of a PTY recorder: how-it-records.md
