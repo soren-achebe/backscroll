@@ -28,6 +28,14 @@ func newTestServer(t *testing.T, redactOn bool) (*webServer, http.Handler) {
 		t.Fatal(err)
 	}
 	t0 := time.Now().Add(-time.Hour)
+	// The seed rows span 4 minutes; if that window straddles local
+	// midnight (tests running between 00:56 and 01:04), by=day sees two
+	// buckets and TestServeStatsBreakdown flakes (hit for real on CI at
+	// 00:57 UTC). Start at midnight instead — still in the past, still
+	// one local day.
+	if end := t0.Add(4 * time.Minute); end.Day() != t0.Day() {
+		t0 = time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, time.Local)
+	}
 	add := func(cmd string, exit int, out string) {
 		t.Helper()
 		raw := []byte(out)
