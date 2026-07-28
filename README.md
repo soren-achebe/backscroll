@@ -467,6 +467,10 @@ claude mcp add backscroll -- backscroll mcp
 { "mcpServers": { "backscroll": { "command": "backscroll", "args": ["mcp"] } } }
 ```
 
+Per-client setup (Claude Code/Desktop, Codex, Cursor, Windsurf, VS Code,
+Zed, Gemini CLI) is on the docs site:
+[**AI agents guide**](https://soren-achebe.github.io/backscroll/mcp/).
+
 It's also listed in the [official MCP Registry](https://registry.modelcontextprotocol.io/?search=backscroll)
 as `io.github.soren-achebe/backscroll`, and each release ships a
 `backscroll-<version>.mcpb` [bundle](https://github.com/anthropics/mcpb)

@@ -1,0 +1,43 @@
+name: Bug report
+description: Something recorded wrong, crashed, or misbehaved
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report! `backscroll doctor` answers most of the
+        environment questions below in one shot — paste its output and
+        you're 80% done.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: >-
+        What did you run, what did you expect, what happened instead?
+        If a command was recorded wrong (missing text, wrong exit code,
+        phantom entry), `backscroll show <id>` / `backscroll export <id>`
+        output of the bad entry is ideal — redact anything private first
+        (`backscroll redact <id>` scrubs it permanently, or just edit the
+        paste).
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`backscroll doctor` output"
+      description: Paste the full output. It covers version, shell, terminal, integration status, and DB health.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal + multiplexer
+      description: e.g. "kitty 0.35, inside tmux 3.4" — if doctor didn't already say.
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: >-
+        If you can trigger it on demand, the exact steps from a fresh
+        shell. "Start `backscroll run`, type X, see Y" is perfect.

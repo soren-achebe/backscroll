@@ -1,0 +1,32 @@
+name: Feature request
+description: Something backscroll should do but doesn't
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >-
+        What are you trying to do, in real-workflow terms? ("I lost X and
+        couldn't get it back with Y" beats "add flag Z" — knowing the
+        underlying need often leads to a better design than the first
+        idea.)
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What would it look like? CLI sketch welcome.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Workarounds you've tried
+  - type: markdown
+    attributes:
+      value: |
+        Two invariants shape what gets accepted (see
+        [CONTRIBUTING](https://github.com/soren-achebe/backscroll/blob/main/CONTRIBUTING.md)):
+        recording must stay **zero-intrusion** (never alter what your
+        terminal shows or how commands behave) and **local-only by
+        default** (no cloud, no telemetry).

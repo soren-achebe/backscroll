@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Docs
+    url: https://soren-achebe.github.io/backscroll/
+    about: Setup, compatibility matrix, guides, and troubleshooting.

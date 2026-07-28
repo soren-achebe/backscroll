@@ -84,7 +84,8 @@ command capture. Full details in the
 - **Web UI** — `backscroll serve` gives you local search with rendered
   ANSI output, diffs, and shareable HTML exports.
 - **MCP server** — `backscroll mcp` lets AI agents search your terminal
-  history (redacted by default).
+  history (redacted by default) — [setup for Claude Code, Cursor, VS Code,
+  Zed & more](mcp.md).
 
 Local-only by design: no cloud, no telemetry, secret redaction built in.
 One static Go binary for Linux, macOS, and Windows.
