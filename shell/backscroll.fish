@@ -41,8 +41,12 @@ end
 
 # Tab completion (active in and out of recorded sessions).
 complete -c backscroll -f
-complete -c backscroll -n __fish_use_subcommand -a "run init list last show search pick diff export import sync stats prune delete redact mcp serve off on doctor version help"
+complete -c backscroll -n __fish_use_subcommand -a "run exec init list last show search pick diff export import sync stats prune delete redact mcp serve off on doctor version help"
 complete -c backscroll -n "__fish_seen_subcommand_from init" -a "bash zsh fish pwsh tmux zellij screen"
+complete -c backscroll -n "__fish_seen_subcommand_from exec" -l quiet -d "record only, no passthrough"
+complete -c backscroll -n "__fish_seen_subcommand_from exec" -l head-cap -d "max bytes kept from start of output" -x
+complete -c backscroll -n "__fish_seen_subcommand_from exec" -l tail-cap -d "max bytes kept from end of output" -x
+complete -c backscroll -n "__fish_seen_subcommand_from exec" -x -a "(__fish_complete_subcommand --fcs-skip=2)"
 complete -c backscroll -n "__fish_seen_subcommand_from export" -l format -a "md cast json html"
 complete -c backscroll -n "__fish_seen_subcommand_from import; and not __fish_seen_subcommand_from atuin zsh bash fish nu pwsh" -a "atuin zsh bash fish nu pwsh" -x
 complete -c backscroll -n "__fish_seen_subcommand_from import" -l dry-run -d "parse and report, write nothing"

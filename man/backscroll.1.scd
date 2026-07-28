@@ -7,6 +7,7 @@ backscroll - never lose a command's output again
 # SYNOPSIS
 
 *backscroll run*++
+*backscroll exec* _command_ [_args_...]++
 *backscroll* _query-command_ [_options_...]
 
 # DESCRIPTION
@@ -51,6 +52,19 @@ convention).
 	_tail-cap_ (default 1 MiB) bytes. The shell is a plain interactive
 	shell so that bash reads _~/.bashrc_; pass *--login* for login-shell
 	semantics (note that a login bash does not read _~/.bashrc_).
+
+*exec* [*--quiet*] [*--head-cap* _N_] [*--tail-cap* _N_] _command_ [_args_...]
+	Run one command and record its output, exit code, cwd and timing —
+	no recorded session needed. Built for cron jobs, CI steps and long
+	builds. stdin/stdout/stderr pass straight through (tee-style;
+	*--quiet* records without echoing) and the child's exit code is
+	mirrored, including 128+_n_ for signal deaths, so it drops into
+	pipelines and crontabs without changing behavior. A recording
+	problem never stops or fails the command itself. Flags after
+	_command_ belong to the command; use *backscroll exec sh -c '...'*
+	for pipes and redirection. The command runs without a terminal
+	(output is piped), so most tools disable colors, exactly as under
+	*tee*; ignore patterns apply as usual.
 
 *init* <*bash*|*zsh*|*fish*|*pwsh*|*tmux*|*zellij*|*screen*>
 	Print the shell-integration snippet (OSC 133 marks, cwd reporting,

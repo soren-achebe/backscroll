@@ -67,6 +67,11 @@ const usage = `backscroll — never lose a command's output again
 
 Usage:
   backscroll run                 start a recorded shell session
+  backscroll exec <cmd> [args]   run one command and record its output,
+                                 exit code, cwd and timing — no session
+                                 needed (cron jobs, CI steps, builds).
+                                 Output passes through, exit code is
+                                 mirrored. --quiet records silently
   backscroll init <bash|zsh|fish|pwsh>
                                  print shell-integration snippet
                                  (add: eval "$(backscroll init zsh)" to rc;
@@ -143,6 +148,8 @@ func main() {
 	switch cmd {
 	case "run":
 		err = cmdRun(args)
+	case "exec":
+		err = cmdExec(args)
 	case "init":
 		err = cmdInit(args)
 	case "list", "last":

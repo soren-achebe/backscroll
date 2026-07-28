@@ -306,6 +306,7 @@ notes: [docs/history-files.md](docs/history-files.md).)
 | `backscroll export 3141 --format cast` | asciicast v2 — replay with `asciinema play` |
 | `backscroll export -1 --format json` | structured record for scripting |
 | `backscroll export -1 --format html -o out.html` | self-contained HTML page with full ANSI color — attach to a ticket, share as-is |
+| `backscroll exec make test` | run one command **outside** any recorded session and store its output/exit/timing — cron jobs, CI steps, builds ([details](#one-shot-commands-cron-ci-builds)) |
 | `backscroll import atuin` | seed the DB from your [atuin](https://github.com/atuinsh/atuin) history — timestamps, exits, cwds and hosts carry over ([details](#bring-your-existing-history)) |
 | `backscroll import zsh` / `bash` / `fish` | …or from plain history files |
 | `backscroll sync init ~/Sync/bks` | cross-machine sync through any shared folder — encrypted, serverless ([details](#cross-machine-sync)) |
@@ -329,6 +330,46 @@ command printed*, not just what you typed. Set `BACKSCROLL_NO_BIND=1`
 before the snippet to opt out. (In bash the binding needs bash ≥ 4.0;
 on macOS's stock bash 3.2 it's skipped — recording itself still works
 there. In PowerShell it uses PSReadLine, which ships with pwsh.)
+
+## One-shot commands (cron, CI, builds)
+
+Not everything happens inside an interactive session. `backscroll exec`
+wraps a single command — no shell, no PTY, no setup — and stores its
+combined stdout+stderr, exit code, cwd and duration like any other
+recorded command:
+
+```sh
+backscroll exec make -j4 test          # flags after the command belong to it
+backscroll exec sh -c 'pg_dump app | gzip > backup.gz'   # shell features? bring a shell
+```
+
+It behaves like `tee` glued to your command: output passes straight
+through (`--quiet` records silently), stdin is connected so pipelines
+work, Ctrl-C reaches the child normally, and **the exit code is
+mirrored** — including `128+n` for signal deaths — so it drops into
+crontabs, Makefiles and CI scripts without changing their behavior.
+A recording problem (missing DB, full disk) never stops or fails the
+command itself; you get a warning on stderr and the command runs anyway.
+
+The killer use case is cron. Instead of `MAILTO` archaeology or
+`>> /var/log/backup.log 2>&1` files nobody rotates:
+
+```cron
+17 3 * * * backscroll exec /usr/local/bin/nightly-backup
+```
+
+…and next week, when you wonder why Tuesday's backup was slow:
+
+```console
+$ backscroll list --since 1w --exit fail
+$ backscroll search "No space left" --since 1w
+$ backscroll diff -1        # what changed vs. the previous run?
+```
+
+Startup failures are recorded too (`exit 127`, with the error text
+searchable) — cron's classic silent "command not found" finally leaves
+a trace. Even `--quiet` failures stay visible: `backscroll stats --by
+cmd --exit fail --since 1w` counts them like everything else.
 
 ## tmux / zellij / screen / SSH
 

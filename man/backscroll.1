@@ -15,6 +15,8 @@ backscroll - never lose a command'\&s output again
 .P
 \fBbackscroll run\fR
 .br
+\fBbackscroll exec\fR \fIcommand\fR [\fIargs\fR.\&.\&.\&]
+.br
 \fBbackscroll\fR \fIquery-command\fR [\fIoptions\fR.\&.\&.\&]
 .P
 .SH DESCRIPTION
@@ -65,6 +67,21 @@ the caps keep the first \fIhead-cap\fR (default 256 KiB) and last
 \fItail-cap\fR (default 1 MiB) bytes.\& The shell is a plain interactive
 shell so that bash reads \fI~/.\&bashrc\fR; pass \fB--login\fR for login-shell
 semantics (note that a login bash does not read \fI~/.\&bashrc\fR).\&
+.P
+.RE
+\fBexec\fR [\fB--quiet\fR] [\fB--head-cap\fR \fIN\fR] [\fB--tail-cap\fR \fIN\fR] \fIcommand\fR [\fIargs\fR.\&.\&.\&]
+.RS 4
+Run one command and record its output, exit code, cwd and timing —
+no recorded session needed.\& Built for cron jobs, CI steps and long
+builds.\& stdin/stdout/stderr pass straight through (tee-style;
+\fB--quiet\fR records without echoing) and the child'\&s exit code is
+mirrored, including 128+_n_ for signal deaths, so it drops into
+pipelines and crontabs without changing behavior.\& A recording
+problem never stops or fails the command itself.\& Flags after
+\fIcommand\fR belong to the command; use \fBbackscroll exec sh -c '\&.\&.\&.\&'\&\fR
+for pipes and redirection.\& The command runs without a terminal
+(output is piped), so most tools disable colors, exactly as under
+\fBtee\fR; ignore patterns apply as usual.\&
 .P
 .RE
 \fBinit\fR <\fBbash\fR|\fBzsh\fR|\fBfish\fR|\fBpwsh\fR|\fBtmux\fR|\fBzellij\fR|\fBscreen\fR>

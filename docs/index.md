@@ -71,6 +71,9 @@ command capture. Full details in the
   ++ctrl+x++ ++ctrl+p++ in bash/zsh/fish, plus tmux/zellij/screen popups.
 - **`stats`** — failure rates, wall-time totals, and activity sparklines
   by command, directory, exit code, host, or day.
+- **`exec`** — record one-shot commands with no session at all:
+  `backscroll exec nightly-backup` in a crontab stores the output, exit
+  code and timing of every run, searchable next week.
 - **`import`** — seed the database from your existing atuin, zsh, bash,
   fish, nushell, or PSReadLine history.
 - **`sync`** — encrypted, append-only, bring-your-own-transport
