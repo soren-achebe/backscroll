@@ -62,7 +62,7 @@ if (( $+functions[compdef] )); then
         compadd -- --format --details --raw --redact -o -n --session --cwd --exit --since --until --host
       fi
     elif [[ $words[2] == import && CURRENT == 3 ]]; then
-      compadd atuin zsh bash fish
+      compadd atuin zsh bash fish nu pwsh
     elif [[ $words[2] == import ]]; then
       compadd -- --dry-run --host -n
     elif [[ $words[2] == sync && CURRENT == 3 ]]; then

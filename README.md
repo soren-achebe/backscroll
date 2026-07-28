@@ -267,10 +267,13 @@ imported 9871 entries from zsh (~/.zsh_history)
 ```
 
 `atuin` imports are the richest (timestamps, exit codes, cwd, hostname —
-their sync means one import covers all your machines). `zsh` gets
+their sync means one import covers all your machines). `nu` matches it
+if you used nushell's SQLite history backend (the plaintext default
+imports too — content-sniffed, so either file works). `zsh` gets
 timestamps and durations if you had `EXTENDED_HISTORY` set, `bash` gets
 timestamps if you had `HISTTIMEFORMAT` set, `fish` always has
-timestamps. Imported entries have no stored *output* — nobody was
+timestamps, `pwsh` reads PSReadLine's `ConsoleHost_history.txt`
+(multiline backtick continuations and all). Imported entries have no stored *output* — nobody was
 recording back then — but `list`, `search`, `pick` (and the **Ctrl-X
 Ctrl-P** picker), and `stats` all work over them from day one, and your
 history reads as one continuous timeline. Re-running an import is

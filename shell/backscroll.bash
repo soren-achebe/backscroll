@@ -168,7 +168,7 @@ _backscroll_complete() {
          esac ;;
     esac
   elif [ "${COMP_WORDS[1]}" = "import" ] && [ "$COMP_CWORD" -eq 2 ]; then
-    COMPREPLY=($(compgen -W "atuin zsh bash fish" -- "$cur"))
+    COMPREPLY=($(compgen -W "atuin zsh bash fish nu pwsh" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "import" ]; then
     COMPREPLY=($(compgen -W "--dry-run --host -n" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "sync" ] && [ "$COMP_CWORD" -eq 2 ]; then

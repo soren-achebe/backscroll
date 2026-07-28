@@ -1,8 +1,10 @@
 // Package histimport parses existing shell-history stores — atuin's
-// SQLite database and plain zsh/bash/fish history files — into entries
-// that can seed a backscroll database. Formats were pinned against the
-// real tools (atuin 18.17, zsh 5.9, fish 4.8, bash 5.2); see the tests
-// for byte-level fixtures.
+// SQLite database, nushell's history (both backends), PSReadLine's
+// ConsoleHost_history.txt and plain zsh/bash/fish history files — into
+// entries that can seed a backscroll database. Formats were pinned
+// against the real tools (atuin 18.17, nushell 0.114, PSReadLine on
+// pwsh 7.5, zsh 5.9, fish 4.8, bash 5.2); see the tests for byte-level
+// fixtures.
 //
 // Imported entries have no recorded output (nobody was recording at the
 // time); they still make list/search/pick/stats useful from day one.
@@ -322,4 +324,112 @@ func ReadAtuin(path string) ([]Entry, error) {
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// ParseNuPlain parses nushell's plaintext history.txt (the default
+// backend): one command per line, embedded newlines written as the
+// three bytes `<\n>` by reedline. (A command that literally contains
+// `<\n>` is ambiguous in the file itself — reedline decodes it as a
+// newline, so we match that.) No timestamps → hash-based seqs, same as
+// plain bash history.
+func ParseNuPlain(data []byte) []Entry {
+	var out []Entry
+	for _, line := range bytes.Split(data, []byte("\n")) {
+		if len(line) == 0 {
+			continue
+		}
+		cmd := strings.ReplaceAll(string(line), `<\n>`, "\n")
+		out = append(out, Entry{Seq: hashSeq(cmd), Cmd: cmd})
+	}
+	return out
+}
+
+// shortHost trims a FQDN to its first label; nushell records the full
+// gethostname() (e.g. "box.example.com") where everything else in the
+// DB uses short names.
+func shortHost(h string) string {
+	if i := strings.IndexByte(h, '.'); i > 0 {
+		return h[:i]
+	}
+	return h
+}
+
+// ReadNuSqlite reads nushell's SQLite history backend (schema pinned
+// against nushell 0.114 / reedline: start_timestamp in epoch
+// milliseconds, duration_ms, nullable exit_status, FQDN hostname).
+// id is the seq.
+func ReadNuSqlite(path string) ([]Entry, error) {
+	db, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	rows, err := db.Query(`SELECT id, command_line, start_timestamp, cwd,
+		hostname, duration_ms, exit_status FROM history ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("read nushell history db: %w", err)
+	}
+	defer rows.Close()
+	var out []Entry
+	for rows.Next() {
+		var e Entry
+		var tsMS, durMS, exit sql.NullInt64
+		var cwd, host sql.NullString
+		if err := rows.Scan(&e.Seq, &e.Cmd, &tsMS, &cwd, &host, &durMS, &exit); err != nil {
+			return nil, err
+		}
+		if e.Cmd == "" {
+			continue
+		}
+		e.Cwd = cwd.String
+		e.Host = shortHost(host.String)
+		if exit.Valid {
+			e.Exit = int(exit.Int64)
+			e.HasExit = true
+		}
+		if tsMS.Valid {
+			e.Started = time.UnixMilli(tsMS.Int64)
+			if durMS.Valid {
+				e.Ended = e.Started.Add(time.Duration(durMS.Int64) * time.Millisecond)
+			}
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// ParsePwsh parses PSReadLine's ConsoleHost_history.txt: one command
+// per line; a multiline command is written as consecutive lines each
+// ending in a backtick except the last (the backtick is the marker,
+// the newline is real). Backticks anywhere else are verbatim. No
+// timestamps → hash-based seqs. (A single-line command whose text
+// genuinely ends in a backtick is ambiguous in the file itself —
+// PSReadLine reads it back as a continuation too, so we match that.)
+func ParsePwsh(data []byte) []Entry {
+	var out []Entry
+	var parts []string
+	flush := func() {
+		if len(parts) == 0 {
+			return
+		}
+		cmd := strings.Join(parts, "\n")
+		parts = parts[:0]
+		if cmd == "" {
+			return
+		}
+		out = append(out, Entry{Seq: hashSeq(cmd), Cmd: cmd})
+	}
+	sc := bufio.NewScanner(bytes.NewReader(data))
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	for sc.Scan() {
+		line := sc.Text()
+		if strings.HasSuffix(line, "`") {
+			parts = append(parts, strings.TrimSuffix(line, "`"))
+			continue
+		}
+		parts = append(parts, line)
+		flush()
+	}
+	flush() // trailing continuation with no terminator: keep what's there
+	return out
 }

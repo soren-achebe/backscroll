@@ -101,14 +101,17 @@ convention).
 	fail --since 1d* renders today's failures oldest-first (*-n* caps how
 	many, default 20 newest matches).
 
-*import* <*atuin*|*zsh*|*bash*|*fish*> [_path_] [*--dry-run*] [*--host* _NAME_] [*-n* _N_]
+*import* <*atuin*|*zsh*|*bash*|*fish*|*nu*|*pwsh*> [_path_] [*--dry-run*] [*--host* _NAME_] [*-n* _N_]
 	Seed the database from history you already have, so *list*,
 	*search*, *pick* and *stats* are useful before your first recorded
 	session. Sources: *atuin* (_~/.local/share/atuin/history.db_ —
 	timestamps, exit codes, cwd, hostnames), *zsh* (_$HISTFILE_ or
 	_~/.zsh_history_; timestamps and durations when EXTENDED_HISTORY
 	was set), *bash* (_$HISTFILE_ or _~/.bash_history_; timestamps when
-	HISTTIMEFORMAT was set), *fish* (_fish_history_). Imported entries
+	HISTTIMEFORMAT was set), *fish* (_fish_history_), *nu*
+	(nushell's _history.sqlite3_ — timestamps, exit codes, cwd,
+	hostnames — or plaintext _history.txt_, detected by content),
+	*pwsh* (PSReadLine's _ConsoleHost_history.txt_). Imported entries
 	have no recorded output — nobody was recording at the time — and
 	entries without timestamps show their age as unknown and are
 	deduplicated by command text. Re-running an import only adds new
@@ -184,7 +187,7 @@ convention).
 *doctor*
 	Check that shell integration, database, and environment are set up
 	correctly. On an empty database it also lists importable history
-	(atuin, zsh, bash, fish) found on this machine, with entry counts.
+	(atuin, nu, zsh, bash, fish, pwsh) found on this machine, with entry counts.
 
 *doctor --reindex*
 	Rebuild the full-text search index from the stored outputs. Use if

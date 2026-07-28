@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/soren-achebe/backscroll/internal/histimport"
 	"github.com/soren-achebe/backscroll/internal/store"
@@ -20,13 +21,16 @@ func cmdImport(args []string) error {
 	hostFlag := fs.String("host", "", "label entries with this origin host (file sources)")
 	nCap := fs.Int("n", 0, "import at most the newest N entries (0 = all)")
 	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, `usage: backscroll import <atuin|zsh|bash|fish> [path] [flags]
+		fmt.Fprintf(os.Stderr, `usage: backscroll import <atuin|zsh|bash|fish|nu|pwsh> [path] [flags]
 
 Seed backscroll from history you already have. Sources:
   atuin   ~/.local/share/atuin/history.db   (times, exits, cwd, host)
   zsh     $HISTFILE / ~/.zsh_history        (times+durations with EXTENDED_HISTORY)
   bash    $HISTFILE / ~/.bash_history       (times if HISTTIMEFORMAT was set)
   fish    ~/.local/share/fish/fish_history  (times)
+  nu      ~/.config/nushell/history.sqlite3 (times, exits, cwd, host)
+          or history.txt, whichever the history.file_format setting wrote
+  pwsh    PSReadLine ConsoleHost_history.txt
 
 Imported entries have no recorded output; re-running an import only adds
 new entries. Not the same as "backscroll sync import" (machine sync).
@@ -63,7 +67,26 @@ Flags:
 		if err != nil {
 			return err
 		}
-	case "zsh", "bash", "fish":
+	case "nu":
+		if path == "" {
+			path = defaultNuHistory()
+		}
+		if path == "" {
+			return fmt.Errorf("no nushell history found — pass the path explicitly")
+		}
+		if isSQLite(path) {
+			entries, err = histimport.ReadNuSqlite(path)
+			if err != nil {
+				return err
+			}
+		} else {
+			data, rerr := os.ReadFile(path)
+			if rerr != nil {
+				return rerr
+			}
+			entries = histimport.ParseNuPlain(data)
+		}
+	case "zsh", "bash", "fish", "pwsh":
 		if path == "" {
 			path = defaultHistFile(src)
 		}
@@ -81,6 +104,8 @@ Flags:
 			entries = histimport.ParseBash(data)
 		case "fish":
 			entries = histimport.ParseFish(data)
+		case "pwsh":
+			entries = histimport.ParsePwsh(data)
 		}
 	default:
 		fs.Usage()
@@ -94,9 +119,13 @@ Flags:
 		for i := range entries {
 			entries[i].Host = *hostFlag
 		}
-	} else if src == "atuin" {
+	} else if src == "atuin" || src == "nu" {
 		// entries recorded on this machine shouldn't wear a host tag
+		// (nu stores the FQDN; compare short names on both sides)
 		if hn, _ := os.Hostname(); hn != "" {
+			if i := strings.IndexByte(hn, '.'); i > 0 {
+				hn = hn[:i]
+			}
 			for i := range entries {
 				if entries[i].Host == hn {
 					entries[i].Host = ""
@@ -169,6 +198,19 @@ func detectHistSources() []histSource {
 			out = append(out, histSource{"atuin", p, n})
 		}
 	}
+	if p := firstExisting(nuHistCandidates()...); p != "" {
+		n := -1
+		if isSQLite(p) {
+			if entries, err := histimport.ReadNuSqlite(p); err == nil {
+				n = len(entries)
+			}
+		} else if data, err := os.ReadFile(p); err == nil {
+			n = len(histimport.ParseNuPlain(data))
+		}
+		if n != 0 {
+			out = append(out, histSource{"nu", p, n})
+		}
+	}
 	home, _ := os.UserHomeDir()
 	canonical := map[string][]string{
 		// deliberately NOT $HISTFILE: an exported HISTFILE from the
@@ -176,8 +218,9 @@ func detectHistSources() []histSource {
 		"zsh":  {filepath.Join(home, ".zsh_history"), filepath.Join(home, ".histfile")},
 		"bash": {filepath.Join(home, ".bash_history")},
 		"fish": {filepath.Join(xdgData(), "fish", "fish_history")},
+		"pwsh": pwshHistCandidates(),
 	}
-	for _, sh := range []string{"zsh", "bash", "fish"} {
+	for _, sh := range []string{"zsh", "bash", "fish", "pwsh"} {
 		p := firstExisting(canonical[sh]...)
 		if p == "" {
 			continue
@@ -191,6 +234,8 @@ func detectHistSources() []histSource {
 				n = len(histimport.ParseBash(data))
 			case "fish":
 				n = len(histimport.ParseFish(data))
+			case "pwsh":
+				n = len(histimport.ParsePwsh(data))
 			}
 		}
 		if n == 0 {
@@ -231,6 +276,65 @@ func defaultHistFile(shell string) string {
 		return firstExisting(os.Getenv("HISTFILE"), filepath.Join(home, ".bash_history"))
 	case "fish":
 		return firstExisting(filepath.Join(xdgData(), "fish", "fish_history"))
+	case "pwsh":
+		return firstExisting(pwshHistCandidates()...)
 	}
 	return ""
+}
+
+// pwshHistCandidates returns PSReadLine's default HistorySavePath
+// locations: $XDG_DATA_HOME-aware ~/.local/share/powershell on
+// unix (verified against pwsh 7.5), %APPDATA% on Windows.
+func pwshHistCandidates() []string {
+	var out []string
+	out = append(out,
+		filepath.Join(xdgData(), "powershell", "PSReadLine", "ConsoleHost_history.txt"))
+	if appdata := os.Getenv("APPDATA"); appdata != "" {
+		out = append(out,
+			filepath.Join(appdata, "Microsoft", "Windows", "PowerShell", "PSReadLine", "ConsoleHost_history.txt"))
+	}
+	return out
+}
+
+// nuHistCandidates returns nushell history locations, richest first:
+// the SQLite backend, then plaintext, across the config dirs nu uses
+// ($XDG_CONFIG_HOME/nushell or ~/.config/nushell on unix — nu honors
+// XDG on every OS — plus %APPDATA%\nushell and the macOS
+// Application Support dir for stock setups).
+func nuHistCandidates() []string {
+	home, _ := os.UserHomeDir()
+	var dirs []string
+	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
+		dirs = append(dirs, filepath.Join(d, "nushell"))
+	}
+	dirs = append(dirs, filepath.Join(home, ".config", "nushell"))
+	if appdata := os.Getenv("APPDATA"); appdata != "" {
+		dirs = append(dirs, filepath.Join(appdata, "nushell"))
+	}
+	dirs = append(dirs, filepath.Join(home, "Library", "Application Support", "nushell"))
+	var out []string
+	for _, d := range dirs {
+		out = append(out, filepath.Join(d, "history.sqlite3"))
+	}
+	for _, d := range dirs {
+		out = append(out, filepath.Join(d, "history.txt"))
+	}
+	return out
+}
+
+func defaultNuHistory() string {
+	return firstExisting(nuHistCandidates()...)
+}
+
+// isSQLite sniffs the 16-byte SQLite magic so an explicit `import nu
+// <path>` picks the right parser regardless of the file's name.
+func isSQLite(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	buf := make([]byte, 16)
+	n, _ := f.Read(buf)
+	return string(buf[:n]) == "SQLite format 3\x00"
 }

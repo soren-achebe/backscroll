@@ -25,6 +25,8 @@ func TestDetectHistSources(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir on windows
 	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
 	// an exported HISTFILE must NOT leak into detection
 	t.Setenv("HISTFILE", filepath.Join(home, ".bash_history"))
 
@@ -37,13 +39,15 @@ func TestDetectHistSources(t *testing.T) {
 	cpFixture(t, td+"/zsh_history", filepath.Join(home, ".zsh_history"))
 	cpFixture(t, td+"/bash_history_ts", filepath.Join(home, ".bash_history"))
 	cpFixture(t, td+"/fish_history", filepath.Join(home, ".local/share/fish/fish_history"))
+	cpFixture(t, td+"/nu_history.sqlite3", filepath.Join(home, ".config/nushell/history.sqlite3"))
+	cpFixture(t, td+"/pwsh_history", filepath.Join(home, ".local/share/powershell/PSReadLine/ConsoleHost_history.txt"))
 
 	got := detectHistSources()
-	if len(got) != 4 {
-		t.Fatalf("want 4 sources, got %+v", got)
+	if len(got) != 6 {
+		t.Fatalf("want 6 sources, got %+v", got)
 	}
-	// order = data richness: atuin first, then zsh/bash/fish
-	wantOrder := []string{"atuin", "zsh", "bash", "fish"}
+	// order = data richness: atuin+nu carry exits/cwd, then the files
+	wantOrder := []string{"atuin", "nu", "zsh", "bash", "fish", "pwsh"}
 	for i, h := range got {
 		if h.Name != wantOrder[i] {
 			t.Errorf("pos %d: want %s, got %s", i, wantOrder[i], h.Name)
@@ -65,5 +69,20 @@ func TestDetectHistSources(t *testing.T) {
 		if h.Name == "zsh" {
 			t.Errorf("empty zsh_history should be suppressed, got %+v", h)
 		}
+	}
+}
+
+func TestNuSqliteSniffBeatsName(t *testing.T) {
+	// explicit path: parser choice is by content, not extension
+	home := t.TempDir()
+	misnamed := filepath.Join(home, "history.txt") // sqlite bytes, txt name
+	cpFixture(t, "internal/histimport/testdata/nu_history.sqlite3", misnamed)
+	if !isSQLite(misnamed) {
+		t.Fatal("sqlite magic not detected")
+	}
+	plain := filepath.Join(home, "history.sqlite3") // txt bytes, sqlite name
+	cpFixture(t, "internal/histimport/testdata/nu_history.txt", plain)
+	if isSQLite(plain) {
+		t.Fatal("plaintext misdetected as sqlite")
 	}
 }

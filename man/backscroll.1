@@ -5,7 +5,7 @@
 .nh
 .ad l
 .\" Begin generated content:
-.TH "backscroll" "1" "2026-07-27"
+.TH "backscroll" "1" "2026-07-28"
 .P
 .SH NAME
 .P
@@ -130,7 +130,7 @@ fail --since 1d\fR renders today'\&s failures oldest-first (\fB-n\fR caps how
 many, default 20 newest matches).\&
 .P
 .RE
-\fBimport\fR <\fBatuin\fR|\fBzsh\fR|\fBbash\fR|\fBfish\fR> [\fIpath\fR] [\fB--dry-run\fR] [\fB--host\fR \fINAME\fR] [\fB-n\fR \fIN\fR]
+\fBimport\fR <\fBatuin\fR|\fBzsh\fR|\fBbash\fR|\fBfish\fR|\fBnu\fR|\fBpwsh\fR> [\fIpath\fR] [\fB--dry-run\fR] [\fB--host\fR \fINAME\fR] [\fB-n\fR \fIN\fR]
 .RS 4
 Seed the database from history you already have, so \fBlist\fR,
 \fBsearch\fR, \fBpick\fR and \fBstats\fR are useful before your first recorded
@@ -138,7 +138,10 @@ session.\& Sources: \fBatuin\fR (\fI~/.\&local/share/atuin/history.\&db\fR —
 timestamps, exit codes, cwd, hostnames), \fBzsh\fR (\fI$HISTFILE\fR or
 \fI~/.\&zsh_history\fR; timestamps and durations when EXTENDED_HISTORY
 was set), \fBbash\fR (\fI$HISTFILE\fR or \fI~/.\&bash_history\fR; timestamps when
-HISTTIMEFORMAT was set), \fBfish\fR (\fIfish_history\fR).\& Imported entries
+HISTTIMEFORMAT was set), \fBfish\fR (\fIfish_history\fR), \fBnu\fR
+(nushell'\&s \fIhistory.\&sqlite3\fR — timestamps, exit codes, cwd,
+hostnames — or plaintext \fIhistory.\&txt\fR, detected by content),
+\fBpwsh\fR (PSReadLine'\&s \fIConsoleHost_history.\&txt\fR).\& Imported entries
 have no recorded output — nobody was recording at the time — and
 entries without timestamps show their age as unknown and are
 deduplicated by command text.\& Re-running an import only adds new
@@ -232,7 +235,7 @@ Pause / resume recording in the current session (in-band; no IPC).\&
 .RS 4
 Check that shell integration, database, and environment are set up
 correctly.\& On an empty database it also lists importable history
-(atuin, zsh, bash, fish) found on this machine, with entry counts.\&
+(atuin, nu, zsh, bash, fish, pwsh) found on this machine, with entry counts.\&
 .P
 .RE
 \fBdoctor --reindex\fR

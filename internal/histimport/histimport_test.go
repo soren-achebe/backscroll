@@ -234,3 +234,120 @@ func TestNeedsCont(t *testing.T) {
 		}
 	}
 }
+
+func TestParseNuPlain(t *testing.T) {
+	// testdata written by real nushell 0.114 (plaintext backend)
+	es := ParseNuPlain(load(t, "nu_history.txt"))
+	if len(es) != 6 {
+		t.Fatalf("got %d entries: %+v", len(es), es)
+	}
+	if es[0].Cmd != "echo first" {
+		t.Errorf("cmd: %q", es[0].Cmd)
+	}
+	if es[1].Cmd != "echo 'multi\nline two'" {
+		t.Errorf("reedline <\\n> decode: %q", es[1].Cmd)
+	}
+	if es[3].Cmd != "echo unïcode ★" {
+		t.Errorf("utf8 passthrough: %q", es[3].Cmd)
+	}
+	for i, e := range es {
+		if e.HasExit || !e.Started.IsZero() {
+			t.Errorf("entry %d: plaintext backend has no exits/times: %+v", i, e)
+		}
+		if e.Seq <= 0 {
+			t.Errorf("entry %d: bad seq %d", i, e.Seq)
+		}
+	}
+	// hash seqs stable across re-parse
+	es2 := ParseNuPlain(load(t, "nu_history.txt"))
+	for i := range es {
+		if es[i].Seq != es2[i].Seq {
+			t.Errorf("seq not stable at %d", i)
+		}
+	}
+}
+
+func TestReadNuSqlite(t *testing.T) {
+	// testdata written by real nushell 0.114 (sqlite backend); hostname
+	// column sanitized to demo-host.example.com after the fact
+	es, err := ReadNuSqlite("testdata/nu_history.sqlite3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(es) != 6 {
+		t.Fatalf("got %d entries: %+v", len(es), es)
+	}
+	if es[1].Cmd != "echo 'multi\nline two'" {
+		t.Errorf("multiline stored raw: %q", es[1].Cmd)
+	}
+	if es[2].Cmd != "^false" || !es[2].HasExit || es[2].Exit != 1 {
+		t.Errorf("external failure exit: %+v", es[2])
+	}
+	if es[0].Host != "demo-host" {
+		t.Errorf("FQDN not shortened: %q", es[0].Host)
+	}
+	if es[0].Cwd != "/tmp/histlab" {
+		t.Errorf("cwd: %q", es[0].Cwd)
+	}
+	// start_timestamp is epoch ms; sanity: year is right and durations add up
+	if y := es[0].Started.Year(); y != 2026 {
+		t.Errorf("ms timestamp misparsed: %v", es[0].Started)
+	}
+	if d := es[4].Ended.Sub(es[4].Started); d < 100*time.Millisecond || d > 200*time.Millisecond {
+		t.Errorf("sleep 120ms duration: %v", d)
+	}
+	// final `exit` row has NULL exit_status/duration in the real DB
+	last := es[5]
+	if last.Cmd != "exit" || last.HasExit {
+		t.Errorf("NULL exit_status should mean no exit: %+v", last)
+	}
+	if last.Started.IsZero() || !last.Ended.IsZero() {
+		t.Errorf("NULL duration: Started set, Ended zero, got %+v", last)
+	}
+	// id is the seq → strictly increasing
+	for i := 1; i < len(es); i++ {
+		if es[i].Seq <= es[i-1].Seq {
+			t.Errorf("seq not increasing at %d", i)
+		}
+	}
+}
+
+func TestParsePwsh(t *testing.T) {
+	// testdata written by real PSReadLine (pwsh 7.5) on this machine
+	es := ParsePwsh(load(t, "pwsh_history"))
+	if len(es) != 6 {
+		t.Fatalf("got %d entries: %+v", len(es), es)
+	}
+	if es[0].Cmd != "echo hello" {
+		t.Errorf("cmd: %q", es[0].Cmd)
+	}
+	if es[2].Cmd != "if ($true) {\n  echo multiline-body\n}" {
+		t.Errorf("backtick continuation: %q", es[2].Cmd)
+	}
+	if es[3].Cmd != "echo 'quoted `\"x`\" arg'" {
+		t.Errorf("mid-line backticks must stay verbatim: %q", es[3].Cmd)
+	}
+	for i, e := range es {
+		if e.HasExit || !e.Started.IsZero() || e.Cwd != "" || e.Host != "" {
+			t.Errorf("entry %d: pwsh history is text-only: %+v", i, e)
+		}
+	}
+}
+
+func TestParsePwshTrailingContinuation(t *testing.T) {
+	// file ending mid-continuation (crash while writing): keep the text
+	es := ParsePwsh([]byte("echo a\nif ($x) {`\n"))
+	if len(es) != 2 || es[1].Cmd != "if ($x) {" {
+		t.Fatalf("got %+v", es)
+	}
+}
+
+func TestShortHost(t *testing.T) {
+	for in, want := range map[string]string{
+		"box.example.com": "box", "box": "box", "": "", ".weird": ".weird",
+	} {
+		if got := shortHost(in); got != want {
+			t.Errorf("shortHost(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

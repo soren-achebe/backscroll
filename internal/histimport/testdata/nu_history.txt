@@ -1,0 +1,6 @@
+echo first
+echo 'multi<\n>line two'
+^false
+echo unïcode ★
+sleep 120ms
+exit
