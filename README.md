@@ -80,7 +80,7 @@ curl -fsSL https://raw.githubusercontent.com/soren-achebe/backscroll/main/instal
 ```
 
 (Read [`install.sh`](install.sh) first if you like — it's short. Pin a version
-with `BACKSCROLL_VERSION=v0.9.2`, change the target with
+with `BACKSCROLL_VERSION=v0.11.1`, change the target with
 `BACKSCROLL_INSTALL_DIR`.)
 
 Homebrew (macOS):
@@ -97,6 +97,14 @@ Windows (Scoop):
 ```powershell
 scoop bucket add backscroll https://github.com/soren-achebe/scoop-bucket
 scoop install backscroll
+```
+
+With [mise](https://mise.jdx.dev) (uses the `ubi` backend — pulls the
+checksummed release binary; note mise's `minimum_release_age` safety window
+may lag the very newest release by design):
+
+```sh
+mise use -g ubi:soren-achebe/backscroll
 ```
 
 With Go:

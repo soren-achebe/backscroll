@@ -42,8 +42,9 @@ curl -fsSL https://raw.githubusercontent.com/soren-achebe/backscroll/main/instal
 
 or `brew install soren-achebe/tap/backscroll` (macOS), `scoop bucket add
 soren-achebe https://github.com/soren-achebe/scoop-bucket && scoop install
-backscroll` (Windows), or grab a static binary / `.deb` / `.rpm` from the
-[releases page](https://github.com/soren-achebe/backscroll/releases/latest).
+backscroll` (Windows), `mise use -g ubi:soren-achebe/backscroll`
+([mise](https://mise.jdx.dev)), or grab a static binary / `.deb` / `.rpm` from
+the [releases page](https://github.com/soren-achebe/backscroll/releases/latest).
 
 Then:
 
