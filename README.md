@@ -4,6 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/soren-achebe/backscroll)](https://github.com/soren-achebe/backscroll/releases/latest)
 [![Go Reference](https://pkg.go.dev/badge/github.com/soren-achebe/backscroll.svg)](https://pkg.go.dev/github.com/soren-achebe/backscroll)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-soren--achebe.github.io%2Fbackscroll-blue)](https://soren-achebe.github.io/backscroll/)
 
 **Never lose a command's output again.**
 
