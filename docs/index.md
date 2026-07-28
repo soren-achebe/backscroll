@@ -85,7 +85,8 @@ command capture. Full details in the
   ANSI output, diffs, and shareable HTML exports.
 - **MCP server** — `backscroll mcp` lets AI agents search your terminal
   history (redacted by default) — [setup for Claude Code, Cursor, VS Code,
-  Zed & more](mcp.md).
+  Zed & more](mcp.md). It works the other way too: [record what your
+  agent runs](agents-audit.md) for a per-command audit trail.
 
 Local-only by design: no cloud, no telemetry, secret redaction built in.
 One static Go binary for Linux, macOS, and Windows.

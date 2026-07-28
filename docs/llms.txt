@@ -20,6 +20,7 @@ Key facts:
 
 - [Overview and setup](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/index.md): pitch, install, 30-second setup, feature tour
 - [AI agents (MCP)](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/mcp.md): per-client MCP setup (Claude Code/Desktop, Codex, Cursor, Windsurf, VS Code, Zed, Gemini CLI), tool reference, security model
+- [Audit what your agent ran](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/agents-audit.md): recording an AI agent's own commands (exec wrappers, driven shells, dev VMs over SSH), review workflow, honest security limits
 - [vs. atuin, asciinema, script](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/comparison.md): honest comparison, what backscroll is NOT, migrating with import
 - [Compatibility matrix](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/compatibility.md): shells, terminals, multiplexers, OSes, coexistence with atuin/starship/zoxide/direnv/oh-my-zsh/p10k
 - [Recovering lost terminal output](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/recover-output.md): field guide for after the fact (tmux/screen/terminal-native/strace) and prevention

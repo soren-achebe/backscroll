@@ -34,7 +34,9 @@ theme:
 
 nav:
   - Home: index.md
-  - AI agents (MCP): mcp.md
+  - AI agents:
+      - Let agents read your history (MCP): mcp.md
+      - Audit what your agent ran: agents-audit.md
   - Compare & compatibility:
       - vs. atuin, asciinema, script: comparison.md
       - Compatibility matrix: compatibility.md

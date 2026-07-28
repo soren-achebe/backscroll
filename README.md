@@ -488,6 +488,11 @@ ignore patterns that already keep matching commands out of the DB entirely.
 server only reads the local DB — recording keeps happening in your shells,
 and nothing leaves the machine except what your agent asks for.
 
+The relationship works in reverse, too: point backscroll *at* your agent
+and every command it runs on your machine or dev VM becomes a searchable,
+per-command audit trail — see [Audit what your agent
+ran](https://soren-achebe.github.io/backscroll/agents-audit/).
+
 ## Web UI
 
 `backscroll serve` starts a **local, read-only web UI** over your recorded
