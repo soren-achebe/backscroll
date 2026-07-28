@@ -44,6 +44,7 @@ nav:
       - Recovering lost terminal output: recover-output.md
       - "OSC 133: a practical guide": osc133.md
       - Anatomy of a PTY recorder: how-it-records.md
+      - Un-rendering the command line: echo-reconstruction.md
       - "Shell history files: a field guide": history-files.md
       - Cross-machine sync design: sync-design.md
 

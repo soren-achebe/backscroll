@@ -148,6 +148,9 @@ error message you're searching for.
 
 ## Recovering the command from its echo
 
+*(Summary — the full deep dive is
+[Un-rendering the command line](echo-reconstruction.md).)*
+
 Plain-OSC 133 emitters (Ghostty, iTerm2, Windows Terminal, manually
 installed integration scripts) mark where the prompt ends (`B`) and
 where execution starts (`C`) — but never say what the command *was*.

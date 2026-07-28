@@ -26,6 +26,7 @@ Key facts:
 - [Recovering lost terminal output](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/recover-output.md): field guide for after the fact (tmux/screen/terminal-native/strace) and prevention
 - [OSC 133: a practical guide](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/osc133.md): wire format, emitters, 17 implementation gotchas
 - [Anatomy of a PTY recorder](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/how-it-records.md): PTY sandwich, passthrough tap, ConPTY, teardown, test strategy
+- [Un-rendering the command line](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/echo-reconstruction.md): recovering typed commands from terminal echo via a prompt-relative grid emulator
 - [Shell history files: a field guide](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/history-files.md): on-disk formats of bash/zsh/fish/nu/PSReadLine/atuin history
 - [Cross-machine sync design](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/sync-design.md): encrypted append-only segment logs, BYO transport
 

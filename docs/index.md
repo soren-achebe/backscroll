@@ -113,6 +113,9 @@ verified against the real tools:
   real parsers.
 - [Anatomy of a PTY recorder](how-it-records.md) — the PTY sandwich,
   passthrough tap, capped buffers, and teardown war stories.
+- [Un-rendering the command line](echo-reconstruction.md) — recovering
+  what you typed from the terminal's echo of it: a tiny grid emulator,
+  cell provenance, and knowing when to give up.
 - [Shell history files: a field guide](history-files.md) — the on-disk
   history formats of bash, zsh, fish, nushell, PSReadLine, and atuin.
 - [Cross-machine sync design](sync-design.md) — encrypted append-only
