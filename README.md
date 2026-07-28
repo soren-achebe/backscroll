@@ -617,10 +617,14 @@ responsibility. backscroll is local-only by design. Still:
   `~/.config/backscroll/redact`. Pattern-based masking is best-effort — eyeball
   before you share.
 - `backscroll prune --older 30d` keeps a rolling window.
-- The DB is `0700`-dir/`0644`-file under your home; treat it like your shell
-  history file. Same for `~/.config/backscroll/sync.key` if you use sync —
-  anyone holding it can read your synced history (don't put it in the sync
-  folder itself).
+- The DB is owner-only (`0700` dir, `0600` file, enforced on every open —
+  since v0.11.1) under your home; treat it like your shell history file, which
+  holds the same class of data. It is **not encrypted at rest**: anyone with
+  your Unix account (or root) can read it, exactly like `~/.bash_history`,
+  `~/.ssh`, or your browser profile. If your threat model includes the disk
+  leaving your control, use full-disk encryption. Same for
+  `~/.config/backscroll/sync.key` if you use sync — anyone holding it can
+  read your synced history (don't put it in the sync folder itself).
 - Don't run it on shared accounts.
 
 ## Status

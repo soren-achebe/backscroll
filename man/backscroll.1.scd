@@ -267,8 +267,10 @@ _~/.config/backscroll/sync.json_
 Recording everything your terminal prints is the point - and a
 responsibility. Recording is local-only and opt-in per session; alt-screen
 applications (editors, pagers, TUIs) are excluded; ignore patterns prevent
-storage, *off*/*on* pauses it, and *redact* scrubs after the fact. See the
-README's privacy section for details.
+storage, *off*/*on* pauses it, and *redact* scrubs after the fact. The
+database is kept owner-only (0600, enforced on every open) but is not
+encrypted at rest - treat it like your shell history file. See the README's
+privacy section for details.
 
 # AUTHORS
 

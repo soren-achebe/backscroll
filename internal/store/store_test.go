@@ -2,7 +2,9 @@ package store
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -420,5 +422,45 @@ func TestNoteLikeEscaping(t *testing.T) {
 	}
 	if res, _ := st.Search("5_%", Filter{Limit: 10}); len(res) != 0 {
 		t.Errorf("wildcard leaked into note search: %+v", res)
+	}
+}
+
+func TestOpenHardensPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix permission bits")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "perm.db")
+	t.Setenv("BACKSCROLL_DB", path)
+
+	// Simulate a database created by an older version with lax perms,
+	// including WAL sidecars.
+	s, err := Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`INSERT INTO sessions(started_at) VALUES(1)`); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	for _, p := range []string{path, path + "-wal", path + "-shm"} {
+		if _, err := os.Stat(p); err == nil {
+			os.Chmod(p, 0o644)
+		}
+	}
+
+	s2, err := Open()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	for _, p := range []string{path, path + "-wal", path + "-shm"} {
+		fi, err := os.Stat(p)
+		if err != nil {
+			continue // sidecar may not exist at this point
+		}
+		if got := fi.Mode().Perm(); got != 0o600 {
+			t.Errorf("%s: perms = %o, want 600", p, got)
+		}
 	}
 }

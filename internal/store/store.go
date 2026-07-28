@@ -221,9 +221,24 @@ func Open() (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+	hardenPerms(path)
 	enc, _ := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedDefault))
 	dec, _ := zstd.NewReader(nil)
 	return &Store{db: db, enc: enc, dec: dec}, nil
+}
+
+// hardenPerms tightens the database (and WAL/SHM/journal sidecar)
+// permissions to owner-only. Recorded output can contain secrets; SQLite
+// creates files honoring the umask (typically 0644), so tighten explicitly
+// on every open — this also retro-fixes databases created by older
+// versions. Best-effort: a chmod failure (read-only or exotic filesystems)
+// must never break recording.
+func hardenPerms(path string) {
+	for _, p := range []string{path, path + "-wal", path + "-shm", path + "-journal"} {
+		if _, err := os.Stat(p); err == nil {
+			_ = os.Chmod(p, 0o600)
+		}
+	}
 }
 
 func (s *Store) Close() error { return s.db.Close() }
