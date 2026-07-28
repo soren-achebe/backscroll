@@ -631,6 +631,7 @@ ignore-patterns, session pause (`off`/`on`), output diffing, the fzf picker
 (`pick`, Ctrl-X Ctrl-P, tmux popups), encrypted cross-machine sync, an MCP
 server for AI agents, a local web UI (`serve`), and a `doctor` command.
 Issues and PRs welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+Version-by-version details live in the [CHANGELOG](CHANGELOG.md).
 
 ## License
 
