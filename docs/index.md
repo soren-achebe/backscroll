@@ -102,6 +102,9 @@ One static Go binary for Linux, macOS, and Windows.
 Deep dives written while building backscroll — everything empirically
 verified against the real tools:
 
+- [Your terminal output is gone. Now what?](recover-output.md) — every
+  recovery path that actually works (tmux, screen, strace on a live
+  process), the ones that don't, and prevention.
 - [OSC 133: a practical guide](osc133.md) — the shell-integration marks
   protocol: wire format, who emits what, and seventeen gotchas that bite
   real parsers.
