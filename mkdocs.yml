@@ -1,0 +1,60 @@
+site_name: backscroll
+site_url: https://soren-achebe.github.io/backscroll/
+site_description: >-
+  backscroll records what your commands printed, not just what you typed —
+  full terminal output history, searchable, local-only.
+repo_url: https://github.com/soren-achebe/backscroll
+repo_name: soren-achebe/backscroll
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - toc.follow
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Home: index.md
+  - Guides:
+      - "OSC 133: a practical guide": osc133.md
+      - Anatomy of a PTY recorder: how-it-records.md
+      - "Shell history files: a field guide": history-files.md
+      - Cross-machine sync design: sync-design.md
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - tables
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/soren-achebe/backscroll

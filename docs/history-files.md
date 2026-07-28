@@ -6,7 +6,7 @@ from the history you already have). Six tools, six on-disk formats, and no
 two agree on how to encode a newline. Everything below was pinned against
 the real tools — atuin 18.17, nushell 0.114, PSReadLine on pwsh 7.5,
 zsh 5.9, fish 4.8, bash 5.2 — with byte-level fixtures in
-[`internal/histimport`](../internal/histimport). Companion pieces:
+[`internal/histimport`](https://github.com/soren-achebe/backscroll/tree/main/internal/histimport). Companion pieces:
 [osc133.md](osc133.md) (shell-integration marks),
 [how-it-records.md](how-it-records.md) (the recorder itself).*
 
