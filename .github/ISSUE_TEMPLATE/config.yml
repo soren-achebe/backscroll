@@ -3,3 +3,6 @@ contact_links:
   - name: Docs
     url: https://soren-achebe.github.io/backscroll/
     about: Setup, compatibility matrix, guides, and troubleshooting.
+  - name: Questions & setup help (Discussions)
+    url: https://github.com/soren-achebe/backscroll/discussions
+    about: Not sure it's a bug? Ask here — paste your `backscroll doctor` output.
