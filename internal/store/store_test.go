@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -462,5 +463,79 @@ func TestOpenHardensPermissions(t *testing.T) {
 		if got := fi.Mode().Perm(); got != 0o600 {
 			t.Errorf("%s: perms = %o, want 600", p, got)
 		}
+	}
+}
+
+func TestPruneToSize(t *testing.T) {
+	st := testStore(t)
+	sess, _ := st.NewSession("bash", "xterm")
+	// Poorly-compressible payloads so size actually accumulates.
+	rnd := make([]byte, 64<<10)
+	for i := range rnd {
+		rnd[i] = byte(i*7919 + i>>3)
+	}
+	base := time.Now().Add(-100 * time.Hour)
+	// FTS text must be valid UTF-8: high-entropy printable ASCII.
+	plainChars := make([]byte, 64<<10)
+	for i := range plainChars {
+		plainChars[i] = byte(33 + (i*2654435761>>7)%94)
+	}
+	for i := 0; i < 40; i++ {
+		out := append([]byte(fmt.Sprintf("payload-%02d ", i)), rnd...)
+		plain := fmt.Sprintf("payload-%02d ", i) + string(plainChars)
+		ts := base.Add(time.Duration(i) * time.Hour)
+		if err := st.AddCommand(sess, fmt.Sprintf("cmd-%02d", i), "/", 0, true,
+			ts, ts, out, false, plain); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before, err := st.fileSize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	limit := before / 3
+	n, err := st.PruneToSize(limit)
+	if err != nil {
+		t.Fatalf("PruneToSize: %v", err)
+	}
+	if n == 0 || n >= 40 {
+		t.Fatalf("deleted %d rows, want 0 < n < 40", n)
+	}
+	after, err := st.fileSize()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after > limit {
+		t.Errorf("size after = %d, want <= %d", after, limit)
+	}
+	// Newest rows must survive, oldest must be gone, in timeline order.
+	cmds, err := st.List(Filter{Limit: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cmds) != 40-int(n) {
+		t.Fatalf("%d rows left, want %d", len(cmds), 40-int(n))
+	}
+	for _, c := range cmds {
+		var idx int
+		fmt.Sscanf(c.Cmd, "cmd-%d", &idx)
+		if idx < int(n) {
+			t.Errorf("old row %q survived while newer ones were pruned", c.Cmd)
+		}
+	}
+	// FTS must not return pruned rows.
+	if res, _ := st.Search(`payload-00`, Filter{Limit: 10}); len(res) != 0 {
+		t.Error("pruned entry still in FTS")
+	}
+	if res, _ := st.Search(`payload-39`, Filter{Limit: 10}); len(res) != 1 {
+		t.Error("newest entry missing from FTS")
+	}
+	// Already under the cap: no-op.
+	n2, err := st.PruneToSize(limit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n2 != 0 {
+		t.Errorf("second PruneToSize deleted %d, want 0", n2)
 	}
 }

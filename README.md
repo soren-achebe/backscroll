@@ -587,7 +587,9 @@ them yourself with `go test ./internal/record -bench .` plus a PTY harness:
   copy (fts5 external content), which roughly halves the database compared
   to the naive setup — measured 28.2 → 14.9 MB on an identical
   1,000-command output-heavy workload. A typical day of interactive work
-  adds a few MB to one SQLite file; `backscroll prune` compacts fully.
+  adds a few MB to one SQLite file. `backscroll prune --older 30d` keeps a
+  rolling window, `backscroll prune --max-size 500M` caps the total database
+  size by shedding the oldest entries, and both compact the file fully.
 
 ## Privacy notes
 
@@ -616,7 +618,8 @@ responsibility. backscroll is local-only by design. Still:
   stored copy isn't. Add your own patterns (one Go regexp per line) in
   `~/.config/backscroll/redact`. Pattern-based masking is best-effort — eyeball
   before you share.
-- `backscroll prune --older 30d` keeps a rolling window.
+- `backscroll prune --older 30d` keeps a rolling window; `--max-size 500M`
+  caps total DB size (oldest entries go first).
 - The DB is owner-only (`0700` dir, `0600` file, enforced on every open —
   since v0.11.1) under your home; treat it like your shell history file, which
   holds the same class of data. It is **not encrypted at rest**: anyone with

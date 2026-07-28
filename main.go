@@ -689,22 +689,70 @@ func parseDur(s string) (time.Duration, error) {
 func cmdPrune(args []string) error {
 	fs := flag.NewFlagSet("prune", flag.ExitOnError)
 	older := fs.String("older", "90d", "delete entries older than this (e.g. 30d, 12h)")
+	maxSize := fs.String("max-size", "", "then delete oldest entries until the DB fits under this size (e.g. 500M, 2G)")
 	fs.Parse(args)
-	d, err := parseDur(*older)
-	if err != nil {
-		return err
-	}
+	olderSet := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "older" {
+			olderSet = true
+		}
+	})
 	st, err := openStore()
 	if err != nil {
 		return err
 	}
 	defer st.Close()
-	n, err := st.Prune(d)
-	if err != nil {
-		return err
+	// With only --max-size given, don't silently apply the 90d default too.
+	if olderSet || *maxSize == "" {
+		d, err := parseDur(*older)
+		if err != nil {
+			return err
+		}
+		n, err := st.Prune(d)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("deleted %d entries older than %s\n", n, *older)
 	}
-	fmt.Printf("deleted %d entries older than %s\n", n, *older)
+	if *maxSize != "" {
+		limit, err := parseSize(*maxSize)
+		if err != nil {
+			return err
+		}
+		n, err := st.PruneToSize(limit)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("deleted %d oldest entries to fit under %s\n", n, *maxSize)
+	}
 	return nil
+}
+
+// parseSize parses a human size like "500M", "2G", "1.5g", "300000" (bytes).
+// Suffixes K/M/G/T are binary (1024-based); an optional trailing B/iB is
+// accepted ("500MB", "2GiB").
+func parseSize(s string) (int64, error) {
+	t := strings.TrimSpace(strings.ToUpper(s))
+	t = strings.TrimSuffix(t, "IB")
+	t = strings.TrimSuffix(t, "B")
+	mult := int64(1)
+	if n := len(t); n > 0 {
+		switch t[n-1] {
+		case 'K':
+			mult, t = 1<<10, t[:n-1]
+		case 'M':
+			mult, t = 1<<20, t[:n-1]
+		case 'G':
+			mult, t = 1<<30, t[:n-1]
+		case 'T':
+			mult, t = 1<<40, t[:n-1]
+		}
+	}
+	v, err := strconv.ParseFloat(strings.TrimSpace(t), 64)
+	if err != nil || v < 0 {
+		return 0, fmt.Errorf("invalid size %q (use e.g. 500M, 2G)", s)
+	}
+	return int64(v * float64(mult)), nil
 }
 
 // cmdNote attaches a searchable annotation to a stored command:

@@ -212,9 +212,13 @@ printed; \fB--rm\fR removes it.\& Notes stay local: they are not carried
 along by \fBsync\fR exports.\&
 .P
 .RE
-\fBprune\fR \fB--older\fR \fI30d\fR
+\fBprune\fR [\fB--older\fR \fI30d\fR] [\fB--max-size\fR \fI500M\fR]
 .RS 4
-Delete entries older than the given age.\&
+Delete entries older than the given age (default 90d), and/or delete
+the oldest entries until the database fits under the given total size
+(K/M/G suffixes).\& With only \fB--max-size\fR, the age default is not
+applied.\& Entries with unknown timestamps (some history imports) are
+treated as oldest.\& The database is compacted afterwards.\&
 .P
 .RE
 \fBdelete\fR \fIid\fR

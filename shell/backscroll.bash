@@ -182,6 +182,8 @@ _backscroll_complete() {
     case "$cur" in
       -*) COMPREPLY=($(compgen -W "--rm" -- "$cur")) ;;
     esac
+  elif [ "${COMP_WORDS[1]}" = "prune" ]; then
+    COMPREPLY=($(compgen -W "--older --max-size" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "doctor" ]; then
     COMPREPLY=($(compgen -W "--reindex" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "serve" ]; then

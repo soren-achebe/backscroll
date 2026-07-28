@@ -853,6 +853,107 @@ func (s *Store) Prune(olderThan time.Duration) (int64, error) {
 	return n, nil
 }
 
+// PruneToSize deletes the oldest commands (timeline order; entries with
+// unknown timestamps — e.g. some history imports — count as oldest) until
+// the database file fits under maxBytes. Because the space is only
+// returned after the FTS index is optimized and the file VACUUMed, it
+// estimates how many rows to shed from their stored payload sizes, then
+// re-measures and repeats if needed. Returns total rows deleted.
+func (s *Store) PruneToSize(maxBytes int64) (int64, error) {
+	var total int64
+	for iter := 0; iter < 8; iter++ {
+		size, err := s.fileSize()
+		if err != nil {
+			return total, err
+		}
+		if size <= maxBytes {
+			return total, nil
+		}
+		need := size - maxBytes
+		// A row's true footprint (row + FTS index share) isn't knowable
+		// from SQL, so scale: if all rows' stored payload sums to P inside
+		// a file of size S, a row with payload p occupies ≈ p·S/P. Walk
+		// oldest-first until the scaled sum covers the excess, then
+		// re-measure (the loop corrects any residual error).
+		var payloadSum int64
+		if err := s.db.QueryRow(`
+			SELECT coalesce(sum(coalesce(length(output),0)+coalesce(length(plain_z),0)+length(cmd)+128),0)
+			FROM commands`).Scan(&payloadSum); err != nil {
+			return total, err
+		}
+		if payloadSum == 0 {
+			return total, nil
+		}
+		scaledNeed := float64(need) * float64(payloadSum) / float64(size)
+		rows, err := s.db.Query(`
+			SELECT id, started_at,
+			       coalesce(length(output),0)+coalesce(length(plain_z),0)+length(cmd)+128
+			FROM commands ORDER BY started_at, id`)
+		if err != nil {
+			return total, err
+		}
+		var lastTS, lastID, acc int64
+		var picked int64
+		for rows.Next() {
+			var id, ts, sz int64
+			if err := rows.Scan(&id, &ts, &sz); err != nil {
+				rows.Close()
+				return total, err
+			}
+			lastTS, lastID = ts, id
+			acc += sz
+			picked++
+			if float64(acc) >= scaledNeed {
+				break
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return total, err
+		}
+		if picked == 0 {
+			return total, nil // nothing left to delete
+		}
+		cond := `started_at < ? OR (started_at = ? AND id <= ?)`
+		if _, err := s.db.Exec(`
+			INSERT INTO commands_fts(commands_fts, rowid, cmd, output)
+			SELECT 'delete', id, cmd, bks_unz(plain_z) FROM commands WHERE `+cond,
+			lastTS, lastTS, lastID); err != nil {
+			return total, err
+		}
+		res, err := s.db.Exec(`DELETE FROM commands WHERE `+cond, lastTS, lastTS, lastID)
+		if err != nil {
+			return total, err
+		}
+		n, _ := res.RowsAffected()
+		total += n
+		if _, err := s.db.Exec(`INSERT INTO commands_fts(commands_fts) VALUES('optimize')`); err != nil {
+			return total, err
+		}
+		if _, err := s.db.Exec(`VACUUM`); err != nil {
+			return total, err
+		}
+		if n == 0 {
+			return total, nil
+		}
+	}
+	return total, nil
+}
+
+// fileSize reports the database's current size from SQLite's own page
+// accounting (page_count × page_size), which tracks the main file even
+// when WAL content hasn't checkpointed yet.
+func (s *Store) fileSize() (int64, error) {
+	var pages, pageSize int64
+	if err := s.db.QueryRow(`PRAGMA page_count`).Scan(&pages); err != nil {
+		return 0, err
+	}
+	if err := s.db.QueryRow(`PRAGMA page_size`).Scan(&pageSize); err != nil {
+		return 0, err
+	}
+	return pages * pageSize, nil
+}
+
 // Delete removes a single command by id.
 func (s *Store) Delete(id int64) error {
 	if err := s.ftsDelete(id); err != nil {

@@ -172,8 +172,12 @@ convention).
 	printed; *--rm* removes it. Notes stay local: they are not carried
 	along by *sync* exports.
 
-*prune* *--older* _30d_
-	Delete entries older than the given age.
+*prune* [*--older* _30d_] [*--max-size* _500M_]
+	Delete entries older than the given age (default 90d), and/or delete
+	the oldest entries until the database fits under the given total size
+	(K/M/G suffixes). With only *--max-size*, the age default is not
+	applied. Entries with unknown timestamps (some history imports) are
+	treated as oldest. The database is compacted afterwards.
 
 *delete* _id_
 	Delete one entry.

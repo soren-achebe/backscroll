@@ -77,6 +77,8 @@ if (( $+functions[compdef] )); then
       compadd -- --addr --redact --open
     elif [[ $words[2] == note ]]; then
       [[ $words[CURRENT] == -* ]] && compadd -- --rm
+    elif [[ $words[2] == prune ]]; then
+      compadd -- --older --max-size
     elif [[ $words[2] == doctor ]]; then
       compadd -- --reindex
     elif [[ $words[2] == (list|last|search|pick|stats) ]]; then

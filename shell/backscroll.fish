@@ -69,6 +69,8 @@ complete -c backscroll -n "__fish_seen_subcommand_from search" -s B -d "lines be
 complete -c backscroll -n "__fish_seen_subcommand_from search" -l redact -d "mask secrets in results"
 complete -c backscroll -n "__fish_seen_subcommand_from stats" -l by -d "breakdown: cmd cwd exit host day" -x -a "cmd cwd exit host day"
 complete -c backscroll -n "__fish_seen_subcommand_from sync" -a "init export import status"
+complete -c backscroll -n "__fish_seen_subcommand_from prune" -l older -d "delete entries older than this (30d, 12h)" -x
+complete -c backscroll -n "__fish_seen_subcommand_from prune" -l max-size -d "shed oldest entries until DB fits under size (500M, 2G)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from doctor" -l reindex -d "rebuild the full-text search index"
 complete -c backscroll -n "__fish_seen_subcommand_from serve" -l addr -d "listen address (default 127.0.0.1:4133)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from serve" -l redact -d "mask secrets in everything served"
