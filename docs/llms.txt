@@ -1,0 +1,41 @@
+# backscroll
+
+> backscroll is a terminal output recorder: it wraps your shell in a PTY,
+> segments the byte stream per command using OSC 133 shell-integration marks,
+> and stores every command's full output, exit code, cwd, and duration in a
+> local SQLite database with full-text search. Unlike shell history tools
+> (atuin, hishtory) it records what commands *printed*, not just what you
+> typed. Single static Go binary; local-only by default; MIT licensed.
+> Built and maintained by an AI agent (Soren Achebe).
+
+Key facts:
+
+- Install: `curl -fsSL https://raw.githubusercontent.com/soren-achebe/backscroll/main/install.sh | sh`, Homebrew (`brew install soren-achebe/tap/backscroll`), Scoop (Windows), or `go install github.com/soren-achebe/backscroll@latest`.
+- Start recording: `backscroll run` (wraps $SHELL), then `eval "$(backscroll init bash|zsh|fish)"` in your rc file. Zero-config (no rc snippet needed) inside fish 4+, nushell, VS Code, kitty, WezTerm, Ghostty, and iTerm2.
+- Query: `backscroll last`, `show -N`, `search <query>` (FTS5 with grep-style `-C` context), `list/search --cwd --exit --since --until --host`, `diff`, `stats --by cmd|cwd|exit|host|day`, `pick` (fzf), `note`, `export` (md/asciicast/json/html), `serve` (local web UI), `import atuin|zsh|bash|fish|nu|pwsh`.
+- AI agents: `backscroll mcp` is a stdio MCP server (tools: search_output, list_commands, get_output, diff_output) with secret redaction on by default. Listed on the official MCP Registry as io.github.soren-achebe/backscroll; an .mcpb bundle ships with each release.
+- Privacy: everything stays on the machine; ignore patterns, `off`/`on` toggle, built-in secret redaction, optional end-to-end-encrypted cross-machine sync (BYO transport).
+
+## Docs
+
+- [Overview and setup](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/index.md): pitch, install, 30-second setup, feature tour
+- [AI agents (MCP)](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/mcp.md): per-client MCP setup (Claude Code/Desktop, Codex, Cursor, Windsurf, VS Code, Zed, Gemini CLI), tool reference, security model
+- [vs. atuin, asciinema, script](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/comparison.md): honest comparison, what backscroll is NOT, migrating with import
+- [Compatibility matrix](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/compatibility.md): shells, terminals, multiplexers, OSes, coexistence with atuin/starship/zoxide/direnv/oh-my-zsh/p10k
+- [Recovering lost terminal output](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/recover-output.md): field guide for after the fact (tmux/screen/terminal-native/strace) and prevention
+- [OSC 133: a practical guide](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/osc133.md): wire format, emitters, 17 implementation gotchas
+- [Anatomy of a PTY recorder](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/how-it-records.md): PTY sandwich, passthrough tap, ConPTY, teardown, test strategy
+- [Shell history files: a field guide](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/history-files.md): on-disk formats of bash/zsh/fish/nu/PSReadLine/atuin history
+- [Cross-machine sync design](https://raw.githubusercontent.com/soren-achebe/backscroll/main/docs/sync-design.md): encrypted append-only segment logs, BYO transport
+
+## Reference
+
+- [README](https://raw.githubusercontent.com/soren-achebe/backscroll/main/README.md): full CLI reference, install matrix, overhead numbers, privacy section
+- [CHANGELOG](https://raw.githubusercontent.com/soren-achebe/backscroll/main/CHANGELOG.md): curated notes for every release
+- [CONTRIBUTING](https://raw.githubusercontent.com/soren-achebe/backscroll/main/CONTRIBUTING.md): invariants (zero-intrusion, local-only), dev commands, bug-report format
+
+## Optional
+
+- [GitHub repository](https://github.com/soren-achebe/backscroll)
+- [Releases (static binaries for Linux/macOS/Windows)](https://github.com/soren-achebe/backscroll/releases)
+- [MCP Registry entry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.soren-achebe/backscroll)
