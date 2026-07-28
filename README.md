@@ -279,6 +279,10 @@ Ctrl-P** picker), and `stats` all work over them from day one, and your
 history reads as one continuous timeline. Re-running an import is
 incremental: it only adds entries it hasn't seen.
 
+(Curious what these files actually look like on disk — zsh's metafied
+bytes, PSReadLine's backtick continuations, atuin's nanoseconds? Field
+notes: [docs/history-files.md](docs/history-files.md).)
+
 ## Use
 
 | command | what it does |

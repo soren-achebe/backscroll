@@ -4,7 +4,7 @@
 // entries that can seed a backscroll database. Formats were pinned
 // against the real tools (atuin 18.17, nushell 0.114, PSReadLine on
 // pwsh 7.5, zsh 5.9, fish 4.8, bash 5.2); see the tests for byte-level
-// fixtures.
+// fixtures and docs/history-files.md for a prose tour of the formats.
 //
 // Imported entries have no recorded output (nobody was recording at the
 // time); they still make list/search/pick/stats useful from day one.
