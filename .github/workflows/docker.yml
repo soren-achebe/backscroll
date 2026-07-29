@@ -1,11 +1,16 @@
 name: docker
 
-# Publishes the MCP-server image to GHCR on every release
+# Publishes the MCP-server image to GHCR on every release tag
 # (and on demand for a given tag via workflow_dispatch).
+#
+# Trigger is the TAG PUSH, not release:published — goreleaser creates
+# the release with GITHUB_TOKEN, and GITHUB_TOKEN-caused events never
+# start other workflows (verified live on v0.11.2: release event fired
+# nothing; the image had to be backfilled by hand).
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:
@@ -25,7 +30,7 @@ jobs:
       - name: Resolve tag
         id: tag
         run: |
-          TAG="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}"
+          TAG="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
