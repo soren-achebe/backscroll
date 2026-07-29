@@ -23,7 +23,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath -ldflags "-s -w" -o /out/backscroll .
 
-FROM alpine:3.20
+FROM alpine:3.24
 RUN adduser -D -h /data backscroll
 COPY --from=build /out/backscroll /usr/local/bin/backscroll
 USER backscroll
