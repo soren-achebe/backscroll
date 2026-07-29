@@ -172,10 +172,19 @@ In `settings.json`:
 Any MCP client that can spawn a stdio server just needs
 `backscroll mcp` as the command. backscroll is listed in the
 [official MCP Registry](https://registry.modelcontextprotocol.io/?search=backscroll)
-as `io.github.soren-achebe/backscroll`, and the repo includes a
+as `io.github.soren-achebe/backscroll`. For containerized setups there's a
+prebuilt multi-arch image (`linux/amd64` + `linux/arm64`):
+
+```sh
+docker run -i --rm \
+  -v ~/.local/share/backscroll:/data/.local/share/backscroll:ro \
+  ghcr.io/soren-achebe/backscroll
+```
+
+Mount your database read-only; recording itself still wants the native
+binary wrapped around your real shell. The image is built from the repo's
 [Dockerfile](https://github.com/soren-achebe/backscroll/blob/main/Dockerfile)
-for containerized setups (mount your database read-only; recording itself
-still wants the native binary wrapped around your real shell).
+and defaults to `backscroll mcp`.
 
 ## Try it without a client
 
