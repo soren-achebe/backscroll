@@ -69,7 +69,7 @@ table.stats .bar { color:var(--c6); letter-spacing:-1px; }
 table.stats td.spark { color:var(--c6); white-space:pre; font-variant-numeric:tabular-nums; opacity:.8; }
 table.stats tr.clk { cursor:pointer; }
 table.stats tr.clk:hover td { background:var(--row-hover, rgba(255,255,255,.04)); }
-#cwdchip, #daychip { display:none; align-items:center; gap:4px; font-size:12px; color:var(--c6);
+#cwdchip, #daychip, #sesschip { display:none; align-items:center; gap:4px; font-size:12px; color:var(--c6);
   border:1px solid var(--border); border-radius:10px; padding:1px 8px; cursor:pointer;
   max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .statnote { color:var(--dim); font-size:12px; text-align:center; padding:12px 0; }
@@ -118,7 +118,8 @@ pre mark.hlm.cur { background:var(--accent); color:var(--bg); }
   <select id="host" style="display:none"><option value="">all hosts</option></select>
   <span id="cwdchip" title="click to clear this filter"></span>
   <span id="daychip" title="click to clear this filter"></span>
-  <select id="view"><option value="">history</option><option value="cmd">by command</option><option value="cwd">by directory</option><option value="exit">by exit</option><option value="host">by host</option><option value="day">by day</option></select>
+  <span id="sesschip" title="click to clear this filter"></span>
+  <select id="view"><option value="">history</option><option value="cmd">by command</option><option value="cwd">by directory</option><option value="exit">by exit</option><option value="host">by host</option><option value="session">by session</option><option value="day">by day</option></select>
   <span id="redacting">redacting</span>
   <span id="stats"></span>
 </header>
@@ -127,7 +128,7 @@ pre mark.hlm.cur { background:var(--accent); color:var(--bg); }
 "use strict";
 const $ = s => document.querySelector(s);
 const list = $("#list"), q = $("#q");
-let timer = null, ctl = null, cwdFilter = "", dayFilter = "";
+let timer = null, ctl = null, cwdFilter = "", dayFilter = "", sessFilter = "";
 
 function ago(ms) {
   if (!ms) return "?";
@@ -156,6 +157,7 @@ async function refresh() {
   for (const id of ["exit","since","host"]) { const v = $("#"+id).value; if (v) p.set(id, v); }
   if (dayFilter) { p.set("since", dayFilter); p.set("until", nextDay(dayFilter)); }
   if (cwdFilter) p.set("cwd", cwdFilter);
+  if (sessFilter) p.set("session", sessFilter);
   const view = $("#view").value;
   q.disabled = !!view;
   if (view) return refreshStats(view, p);
@@ -202,7 +204,7 @@ async function refreshStats(view, p) {
   if (!gs.length) { list.innerHTML = '<div class="empty">nothing here</div>'; return; }
   const span = d.spark_from ? (d.spark_from === d.spark_to ? 'on ' + esc(d.spark_from) : esc(d.spark_from) + ' → ' + esc(d.spark_to)) : '';
   const max = Math.max(...gs.map(g => g.count));
-  const label = {cmd:"command",cwd:"directory",exit:"exit",host:"host",day:"day"}[view] || view;
+  const label = {cmd:"command",cwd:"directory",exit:"exit",host:"host",session:"session",day:"day"}[view] || view;
   list.innerHTML =
     '<table class="stats"><tr><th>' + label + '</th><th style="text-align:right">count</th><th></th><th style="text-align:right">fail%</th><th style="text-align:right">total time</th>' +
     (span ? '<th title="when these ran, ' + span + '">activity</th>' : '') + '</tr>' +
@@ -442,6 +444,15 @@ function setCwd(v) {
 }
 $("#cwdchip").onclick = () => setCwd("");
 
+function setSession(v) {
+  sessFilter = v;
+  const chip = $("#sesschip");
+  chip.style.display = v ? "inline-flex" : "none";
+  chip.textContent = v ? "session #" + v + " \u2715" : "";
+  refresh();
+}
+$("#sesschip").onclick = () => setSession("");
+
 // nextDay("2026-07-26") -> "2026-07-27"; pure string/local-date math so the
 // server (which grouped days in its own local time) gets plain dates back.
 function nextDay(d) {
@@ -475,6 +486,7 @@ function applyStatFilter(dim, raw) {
   q.disabled = false;
   if (dim === "cwd") { setCwd(raw); return; }
   if (dim === "day") { setDay(raw); return; }
+  if (dim === "session") { setSession(raw); return; }
   if (dim === "host") {
     const sel = $("#host");
     ensureOpt(sel, raw, raw);

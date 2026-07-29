@@ -108,6 +108,52 @@ func TestStatKey(t *testing.T) {
 	if got := statKey("day", c2); got != "unknown" {
 		t.Errorf("zero-time day key = %q, want unknown", got)
 	}
+	c3 := c
+	c3.SessionID = 7
+	if got := statKey("session", c3); got != "#7" {
+		t.Errorf("session key = %q, want #7", got)
+	}
+	if got := statKey("session", c2); got != "(imported)" {
+		t.Errorf("no-session key = %q, want (imported)", got)
+	}
+}
+
+func TestGroupStatsSessionOrder(t *testing.T) {
+	mk := func(sess int64) store.Command {
+		c := store.Command{Cmd: "ls", SessionID: sess, StartedAt: time.Now()}
+		if sess == 0 {
+			c.Machine = "m1"
+			c.Host = "laptop"
+		}
+		return c
+	}
+	cmds := []store.Command{mk(2), mk(10), mk(2), mk(0), mk(10), mk(10)}
+	list := groupStats(cmds, "session")
+	var keys []string
+	for _, g := range list {
+		keys = append(keys, g.key)
+	}
+	want := []string{"#10", "#2", "(imported)"}
+	if len(keys) != len(want) {
+		t.Fatalf("groups = %v, want %v", keys, want)
+	}
+	for i := range want {
+		if keys[i] != want[i] {
+			t.Fatalf("groups = %v, want %v (newest session first, imported last)", keys, want)
+		}
+	}
+	if list[0].count != 3 || list[1].count != 2 || list[2].count != 1 {
+		t.Fatalf("counts = %d/%d/%d", list[0].count, list[1].count, list[2].count)
+	}
+}
+
+func TestSessionOrd(t *testing.T) {
+	if sessionOrd("#12") != 12 || sessionOrd("#3") != 3 {
+		t.Fatal("numeric session keys")
+	}
+	if sessionOrd("(imported)") != -1 {
+		t.Fatal("(imported) must sort last")
+	}
 }
 
 func TestCmdHeadOperators(t *testing.T) {

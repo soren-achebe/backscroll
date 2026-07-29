@@ -86,7 +86,10 @@ backscroll diff -3                           # what changed vs. the previous
 ```
 
 Each recorded session has an id, so `list --session N` isolates one SSH
-connection or one harness run. Annotate as you review — `backscroll note 1234
+connection or one harness run — `backscroll stats --by session` lists the
+sessions themselves (newest first, with per-session command count and
+failure rate), which is how you find the `N` when many agents ran
+concurrently. Annotate as you review — `backscroll note 1234
 "this is where it went sideways"` — notes are searchable later.
 
 Need to hand the evidence to someone? `backscroll export --format html

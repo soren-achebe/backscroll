@@ -15,11 +15,11 @@ import (
 )
 
 // cmdStats prints either the overview (no flags) or a breakdown of the
-// recorded history along one dimension (--by cmd|cwd|exit|host|day),
+// recorded history along one dimension (--by cmd|cwd|exit|host|session|day),
 // scoped by the shared list/search filters.
 func cmdStats(args []string) error {
 	fs := flag.NewFlagSet("stats", flag.ExitOnError)
-	by := fs.String("by", "", "breakdown `dimension`: cmd, cwd, exit, host, day")
+	by := fs.String("by", "", "breakdown `dimension`: cmd, cwd, exit, host, session, day")
 	n := fs.Int("n", 15, "max rows in a breakdown")
 	mkFilter := filterFlags(fs)
 	fs.Parse(args)
@@ -32,15 +32,15 @@ func cmdStats(args []string) error {
 	}
 	if *by == "" {
 		if f.Active() {
-			return fmt.Errorf("filters need a breakdown: add --by cmd|cwd|exit|host|day")
+			return fmt.Errorf("filters need a breakdown: add --by cmd|cwd|exit|host|session|day")
 		}
 		return statsOverview()
 	}
 	dim := strings.TrimPrefix(*by, "--")
 	switch dim {
-	case "cmd", "command", "cwd", "dir", "exit", "host", "day", "date":
+	case "cmd", "command", "cwd", "dir", "exit", "host", "session", "day", "date":
 	default:
-		return fmt.Errorf("--by: want cmd, cwd, exit, host or day, got %q", *by)
+		return fmt.Errorf("--by: want cmd, cwd, exit, host, session or day, got %q", *by)
 	}
 	return statsBreakdown(dim, *n, f)
 }
@@ -67,7 +67,7 @@ func statsOverview() error {
 		fmt.Printf("oldest entry      : %s\n", s.FirstAt.Format("2006-01-02 15:04"))
 	}
 	fmt.Printf("database path     : %s\n", store.DefaultPath())
-	fmt.Printf("\nbreakdowns        : backscroll stats --by cmd|cwd|exit|host|day\n")
+	fmt.Printf("\nbreakdowns        : backscroll stats --by cmd|cwd|exit|host|session|day\n")
 	return nil
 }
 
@@ -179,6 +179,9 @@ func groupStats(cmds []store.Command, dim string) []*statGroup {
 	}
 	if dim == "day" || dim == "date" {
 		sort.Slice(list, func(i, j int) bool { return list[i].key < list[j].key })
+	} else if dim == "session" {
+		// newest session first; imported rows (no local session) sink to the end
+		sort.Slice(list, func(i, j int) bool { return sessionOrd(list[i].key) > sessionOrd(list[j].key) })
 	} else {
 		sort.Slice(list, func(i, j int) bool {
 			if list[i].count != list[j].count {
@@ -188,6 +191,17 @@ func groupStats(cmds []store.Command, dim string) []*statGroup {
 		})
 	}
 	return list
+}
+
+// sessionOrd maps a session breakdown key to its numeric id for sorting;
+// "(imported)" (rows with no local session) sorts below every real session.
+func sessionOrd(key string) int64 {
+	if !strings.HasPrefix(key, "#") {
+		return -1
+	}
+	var n int64
+	fmt.Sscanf(key[1:], "%d", &n)
+	return n
 }
 
 // statTimeRange finds the first and last start time across the filtered
@@ -251,6 +265,11 @@ func statKey(dim string, c store.Command) string {
 			return "local"
 		}
 		return c.Host
+	case "session":
+		if c.SessionID > 0 {
+			return fmt.Sprintf("#%d", c.SessionID)
+		}
+		return "(imported)" // synced or history-imported rows carry no local session
 	case "day", "date":
 		if c.StartedAt.IsZero() {
 			return "unknown"
@@ -368,7 +387,7 @@ func printStatTable(dim string, list []*statGroup) {
 	label := map[string]string{
 		"cmd": "command", "command": "command",
 		"cwd": "directory", "dir": "directory",
-		"exit": "exit", "host": "host",
+		"exit": "exit", "host": "host", "session": "session",
 	}[dim]
 	home, _ := os.UserHomeDir()
 	withSpark := len(list) > 0 && list[0].spark != nil

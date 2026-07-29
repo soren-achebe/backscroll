@@ -83,7 +83,7 @@ if (( $+functions[compdef] )); then
       compadd -- --reindex
     elif [[ $words[2] == (list|last|search|pick|stats) ]]; then
       if [[ $words[CURRENT-1] == (--by|-by) ]]; then
-        compadd cmd cwd exit host day
+        compadd cmd cwd exit host session day
       elif [[ $words[CURRENT-1] == (--exit|-exit) ]]; then
         compadd fail 0 1 2
       elif [[ $words[CURRENT-1] == (--cwd|-cwd) ]]; then

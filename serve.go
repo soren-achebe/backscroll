@@ -481,6 +481,15 @@ type statJSON struct {
 func statRawKey(dim, key string, redacting bool, extra []*regexp.Regexp) string {
 	switch dim {
 	case "cwd", "dir", "host":
+	case "session":
+		id := strings.TrimPrefix(key, "#")
+		if key == id { // "(imported)" — no local session to filter on
+			return ""
+		}
+		if _, err := strconv.ParseInt(id, 10, 64); err != nil {
+			return ""
+		}
+		return id // numeric; nothing for redaction to alter
 	case "exit":
 		if _, err := strconv.ParseInt(key, 10, 64); err != nil {
 			return "" // "?" — no exit recorded, not expressible as exit=N
@@ -500,13 +509,13 @@ func statRawKey(dim, key string, redacting bool, extra []*regexp.Regexp) string 
 	return key
 }
 
-// breakdown serves /api/stats?by=cmd|cwd|exit|host|day scoped by the
+// breakdown serves /api/stats?by=cmd|cwd|exit|host|session|day scoped by the
 // shared filters — the web-UI face of `backscroll stats --by`.
 func (s *webServer) breakdown(w http.ResponseWriter, dim string, q url.Values) {
 	switch dim {
-	case "cmd", "cwd", "exit", "host", "day":
+	case "cmd", "cwd", "exit", "host", "session", "day":
 	default:
-		http.Error(w, "by: want cmd, cwd, exit, host or day", http.StatusBadRequest)
+		http.Error(w, "by: want cmd, cwd, exit, host, session or day", http.StatusBadRequest)
 		return
 	}
 	f := filterFromQuery(q)

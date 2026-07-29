@@ -387,9 +387,37 @@ func TestServeStatsRawKeys(t *testing.T) {
 	}
 }
 
+func TestServeStatsSession(t *testing.T) {
+	_, h := newTestServer(t, false)
+	_, body := get(t, h, "/api/stats?by=session")
+	groups := body["groups"].([]any)
+	if len(groups) != 1 {
+		t.Fatalf("groups = %v, want exactly the one seed session", groups)
+	}
+	g := groups[0].(map[string]any)
+	if g["key"] != "#1" || g["raw"] != "1" || g["count"].(float64) != 4 {
+		t.Fatalf("session group = %v", g)
+	}
+	// round trip: the raw key really filters /api/commands
+	_, body = get(t, h, "/api/commands?session="+g["raw"].(string))
+	if cs := body["commands"].([]any); len(cs) != 4 {
+		t.Fatalf("session round trip: %d commands, want 4", len(cs))
+	}
+	_, body = get(t, h, "/api/commands?session=99")
+	if cs, ok := body["commands"].([]any); ok && len(cs) != 0 {
+		t.Fatalf("session=99: want none, got %v", cs)
+	}
+}
+
 func TestStatRawKey(t *testing.T) {
 	if got := statRawKey("exit", "?", false, nil); got != "" {
 		t.Fatalf("'?' exit must not be filterable, got %q", got)
+	}
+	if got := statRawKey("session", "#12", false, nil); got != "12" {
+		t.Fatalf("session raw: got %q, want 12", got)
+	}
+	if got := statRawKey("session", "(imported)", false, nil); got != "" {
+		t.Fatalf("(imported) must not be filterable, got %q", got)
 	}
 	if got := statRawKey("cmd", "git", false, nil); got != "" {
 		t.Fatalf("cmd dim must not be filterable, got %q", got)

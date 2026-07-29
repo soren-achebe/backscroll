@@ -551,8 +551,12 @@ func cmdShow(args []string) error {
 		if sp := fmtSpan(*c); sp != "" {
 			took = " · took " + sp
 		}
-		fmt.Printf("\x1b[2m# id %d · %s · cwd %s · exit %s%s · %s%s\x1b[0m\n",
-			c.ID, when, c.Cwd, exitStr(*c),
+		sess := ""
+		if c.SessionID > 0 {
+			sess = fmt.Sprintf(" · session #%d", c.SessionID)
+		}
+		fmt.Printf("\x1b[2m# id %d%s · %s · cwd %s · exit %s%s · %s%s\x1b[0m\n",
+			c.ID, sess, when, c.Cwd, exitStr(*c),
 			took, humanBytes(c.OutputLen), from)
 		if strings.HasPrefix(c.Machine, "hist:") {
 			fmt.Printf("\x1b[2m# imported from shell history (%s) — no output was recorded\x1b[0m\n",

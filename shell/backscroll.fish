@@ -67,7 +67,7 @@ complete -c backscroll -n "__fish_seen_subcommand_from search" -s C -d "context 
 complete -c backscroll -n "__fish_seen_subcommand_from search" -s A -d "lines after matches (grep -A)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from search" -s B -d "lines before matches (grep -B)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from search" -l redact -d "mask secrets in results"
-complete -c backscroll -n "__fish_seen_subcommand_from stats" -l by -d "breakdown: cmd cwd exit host day" -x -a "cmd cwd exit host day"
+complete -c backscroll -n "__fish_seen_subcommand_from stats" -l by -d "breakdown: cmd cwd exit host session day" -x -a "cmd cwd exit host session day"
 complete -c backscroll -n "__fish_seen_subcommand_from sync" -a "init export import status"
 complete -c backscroll -n "__fish_seen_subcommand_from prune" -l older -d "delete entries older than this (30d, 12h)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from prune" -l max-size -d "shed oldest entries until DB fits under size (500M, 2G)" -x

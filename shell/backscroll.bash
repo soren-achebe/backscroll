@@ -190,7 +190,7 @@ _backscroll_complete() {
     COMPREPLY=($(compgen -W "--addr --redact --open" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "list" ] || [ "${COMP_WORDS[1]}" = "last" ] || [ "${COMP_WORDS[1]}" = "search" ] || [ "${COMP_WORDS[1]}" = "pick" ] || [ "${COMP_WORDS[1]}" = "stats" ]; then
     case "$prev" in
-      --by|-by)     COMPREPLY=($(compgen -W "cmd cwd exit host day" -- "$cur")) ;;
+      --by|-by)     COMPREPLY=($(compgen -W "cmd cwd exit host session day" -- "$cur")) ;;
       --exit|-exit) COMPREPLY=($(compgen -W "fail 0 1 2" -- "$cur")) ;;
       --cwd|-cwd)   COMPREPLY=($(compgen -d -- "$cur")) ;;
       --since|-since|--until|-until|--session|-session|--host|-host|-n) ;;
