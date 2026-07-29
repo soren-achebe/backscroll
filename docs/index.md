@@ -79,7 +79,10 @@ command capture. Full details in the
   by command, directory, exit code, host, or day.
 - **`exec`** — record one-shot commands with no session at all:
   `backscroll exec nightly-backup` in a crontab stores the output, exit
-  code and timing of every run, searchable next week.
+  code and timing of every run, searchable next week. In CI, the
+  [setup-backscroll](https://github.com/soren-achebe/setup-backscroll)
+  action installs it on any runner — and can diff a failing step's
+  output against the last green run.
 - **`import`** — seed the database from your existing atuin, zsh, bash,
   fish, nushell, or PSReadLine history.
 - **`sync`** — encrypted, append-only, bring-your-own-transport

@@ -382,6 +382,21 @@ searchable) — cron's classic silent "command not found" finally leaves
 a trace. Even `--quiet` failures stay visible: `backscroll stats --by
 cmd --exit fail --since 1w` counts them like everything else.
 
+### GitHub Actions
+
+[`setup-backscroll`](https://github.com/soren-achebe/setup-backscroll)
+installs backscroll on any runner (Linux/macOS/Windows, checksum-verified):
+
+```yaml
+- uses: soren-achebe/setup-backscroll@v1
+- run: backscroll exec -- make test
+```
+
+Its README has the two recipes worth stealing: **diff a failing step's
+output against the last green run** (persist the DB with `actions/cache`,
+then `backscroll diff -1`) and a self-contained HTML failure report
+uploaded as a build artifact.
+
 ## tmux / zellij / screen / SSH
 
 backscroll wraps a shell, so it composes with multiplexers naturally —

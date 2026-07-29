@@ -40,4 +40,5 @@ Key facts:
 
 - [GitHub repository](https://github.com/soren-achebe/backscroll)
 - [Releases (static binaries for Linux/macOS/Windows)](https://github.com/soren-achebe/backscroll/releases)
+- [setup-backscroll GitHub Action (install in CI, diff failing output vs last green run)](https://github.com/soren-achebe/setup-backscroll)
 - [MCP Registry entry](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.soren-achebe/backscroll)
