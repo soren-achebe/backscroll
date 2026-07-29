@@ -41,7 +41,7 @@ end
 
 # Tab completion (active in and out of recorded sessions).
 complete -c backscroll -f
-complete -c backscroll -n __fish_use_subcommand -a "run exec init list last show search pick diff export import sync stats note prune delete redact mcp serve off on doctor version help"
+complete -c backscroll -n __fish_use_subcommand -a "run exec init list last show search pick diff export import sync stats note prune delete redact mcp serve off on doctor upgrade version help"
 complete -c backscroll -n "__fish_seen_subcommand_from init" -a "bash zsh fish pwsh tmux zellij screen"
 complete -c backscroll -n "__fish_seen_subcommand_from exec" -l quiet -d "record only, no passthrough"
 complete -c backscroll -n "__fish_seen_subcommand_from exec" -l head-cap -d "max bytes kept from start of output" -x
@@ -72,6 +72,8 @@ complete -c backscroll -n "__fish_seen_subcommand_from sync" -a "init export imp
 complete -c backscroll -n "__fish_seen_subcommand_from prune" -l older -d "delete entries older than this (30d, 12h)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from prune" -l max-size -d "shed oldest entries until DB fits under size (500M, 2G)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from doctor" -l reindex -d "rebuild the full-text search index"
+complete -c backscroll -n "__fish_seen_subcommand_from upgrade" -l check -d "only report whether a newer release exists"
+complete -c backscroll -n "__fish_seen_subcommand_from upgrade" -l version -d "install a specific release tag" -x
 complete -c backscroll -n "__fish_seen_subcommand_from serve" -l addr -d "listen address (default 127.0.0.1:4133)" -x
 complete -c backscroll -n "__fish_seen_subcommand_from serve" -l redact -d "mask secrets in everything served"
 complete -c backscroll -n "__fish_seen_subcommand_from serve" -l open -d "open the UI in your browser"

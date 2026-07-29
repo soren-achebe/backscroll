@@ -46,7 +46,7 @@ fi
 if (( $+functions[compdef] )); then
   _backscroll() {
     if (( CURRENT == 2 )); then
-      compadd run exec init list last show search pick diff export import sync stats note prune delete redact mcp serve off on doctor version help
+      compadd run exec init list last show search pick diff export import sync stats note prune delete redact mcp serve off on doctor upgrade version help
     elif [[ $words[2] == init ]]; then
       compadd bash zsh fish pwsh tmux zellij screen
     elif [[ $words[2] == export && $words[CURRENT-1] == (--format|-format) ]]; then
@@ -81,6 +81,8 @@ if (( $+functions[compdef] )); then
       compadd -- --older --max-size
     elif [[ $words[2] == doctor ]]; then
       compadd -- --reindex
+    elif [[ $words[2] == upgrade ]]; then
+      compadd -- --check --version
     elif [[ $words[2] == (list|last|search|pick|stats) ]]; then
       if [[ $words[CURRENT-1] == (--by|-by) ]]; then
         compadd cmd cwd exit host session day

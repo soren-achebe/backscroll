@@ -81,7 +81,9 @@ curl -fsSL https://raw.githubusercontent.com/soren-achebe/backscroll/main/instal
 
 (Read [`install.sh`](install.sh) first if you like — it's short. Pin a version
 with `BACKSCROLL_VERSION=v0.11.1`, change the target with
-`BACKSCROLL_INSTALL_DIR`.)
+`BACKSCROLL_INSTALL_DIR`. Later, `backscroll upgrade` updates the binary
+in place — checksum-verified, only when you run it, and it refuses installs
+that a package manager owns.)
 
 Homebrew (macOS):
 
@@ -650,6 +652,10 @@ responsibility. backscroll is local-only by design. Still:
   `~/.config/backscroll/sync.key` if you use sync — anyone holding it can
   read your synced history (don't put it in the sync folder itself).
 - Don't run it on shared accounts.
+- **Network**: exactly one command ever touches the network —
+  `backscroll upgrade`, which fetches a release from GitHub when (and only
+  when) you run it. There is no background update check, no telemetry, and
+  recording/search/serve/sync never make a connection anywhere.
 
 Found a way to defeat any of these controls? That's a vulnerability — see
 [SECURITY.md](SECURITY.md) for private reporting and the full threat model.

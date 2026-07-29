@@ -152,7 +152,7 @@ _backscroll_complete() {
   local cur=${COMP_WORDS[COMP_CWORD]}
   local prev=${COMP_WORDS[COMP_CWORD-1]:-}
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "run exec init list last show search pick diff export import sync stats note prune delete redact mcp serve off on doctor version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "run exec init list last show search pick diff export import sync stats note prune delete redact mcp serve off on doctor upgrade version help" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "init" ]; then
     COMPREPLY=($(compgen -W "bash zsh fish pwsh tmux zellij screen" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "export" ] && { [ "$prev" = "--format" ] || [ "$prev" = "-format" ]; }; then
@@ -186,6 +186,8 @@ _backscroll_complete() {
     COMPREPLY=($(compgen -W "--older --max-size" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "doctor" ]; then
     COMPREPLY=($(compgen -W "--reindex" -- "$cur"))
+  elif [ "${COMP_WORDS[1]}" = "upgrade" ]; then
+    COMPREPLY=($(compgen -W "--check --version" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "serve" ]; then
     COMPREPLY=($(compgen -W "--addr --redact --open" -- "$cur"))
   elif [ "${COMP_WORDS[1]}" = "list" ] || [ "${COMP_WORDS[1]}" = "last" ] || [ "${COMP_WORDS[1]}" = "search" ] || [ "${COMP_WORDS[1]}" = "pick" ] || [ "${COMP_WORDS[1]}" = "stats" ]; then

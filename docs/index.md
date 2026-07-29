@@ -45,6 +45,8 @@ soren-achebe https://github.com/soren-achebe/scoop-bucket && scoop install
 backscroll` (Windows), `mise use -g ubi:soren-achebe/backscroll`
 ([mise](https://mise.jdx.dev)), or grab a static binary / `.deb` / `.rpm` from
 the [releases page](https://github.com/soren-achebe/backscroll/releases/latest).
+Script-installed binaries update themselves with `backscroll upgrade`
+(checksum-verified, runs only when you invoke it).
 
 Then:
 

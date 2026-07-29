@@ -36,7 +36,8 @@ Understanding the design helps you judge what is a vulnerability here:
 - **Local-only by design.** The recorder, database, search, web UI, and MCP
   server make **no network calls**. There is no telemetry, no account, no
   cloud. `sync` is file-based: you move encrypted segment files with whatever
-  transport you already trust.
+  transport you already trust. The single exception is `backscroll upgrade`
+  (v0.12+), which contacts GitHub releases only when you invoke it.
 - **Database at rest:** `~/.local/share/backscroll/backscroll.db` (and WAL/SHM
   sidecars) are enforced owner-only `0600` on every open. The DB is **not
   encrypted at rest** — treat it like `~/.bash_history` with outputs attached,
@@ -70,6 +71,13 @@ Understanding the design helps you judge what is a vulnerability here:
 - Dependencies are minimal and CGO-free; `govulncheck` runs weekly in CI.
 - The Homebrew tap, Scoop bucket, and GHCR images are generated from the same
   pipeline and pinned to the same checksums.
+- `backscroll upgrade` downloads over HTTPS from the GitHub release, verifies
+  the archive's SHA-256 against the release's `checksums.txt`, and sanity-runs
+  the staged binary before atomically swapping it in; a failed check leaves
+  the current binary untouched. A bypass of that verification **is** a
+  vulnerability. (Checksums come from the same channel as the archive, so this
+  protects against corruption and mirror tampering, not a full compromise of
+  the GitHub release itself.)
 
 ## Out of scope
 

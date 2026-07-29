@@ -224,6 +224,18 @@ convention).
 	search results ever look incomplete (e.g. after a crash mid-write or
 	after older backscroll versions wrote to the same database).
 
+*upgrade*
+	Replace this binary with the latest release: the release archive for
+	this OS/architecture is downloaded from GitHub, verified against the
+	release's sha256 checksums, sanity-run, and atomically swapped in.
+	Installs managed by a package manager (Homebrew, Scoop, deb/rpm, Nix)
+	are detected and refused with the matching package-manager command.
+	*--check* only reports whether a newer release exists; *--version*
+	_vX.Y.Z_ installs that release instead of the latest (downgrades
+	allowed). This is the only backscroll command that ever touches the
+	network, and only when you run it - there is no background update
+	check and no telemetry.
+
 # FILTERS
 
 *list*, *search*, *pick*, and *export* accept:
@@ -276,8 +288,9 @@ responsibility. Recording is local-only and opt-in per session; alt-screen
 applications (editors, pagers, TUIs) are excluded; ignore patterns prevent
 storage, *off*/*on* pauses it, and *redact* scrubs after the fact. The
 database is kept owner-only (0600, enforced on every open) but is not
-encrypted at rest - treat it like your shell history file. See the README's
-privacy section for details.
+encrypted at rest - treat it like your shell history file. No backscroll
+command touches the network except *upgrade*, and only when you run it.
+See the README's privacy section for details.
 
 # AUTHORS
 

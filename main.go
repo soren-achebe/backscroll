@@ -132,6 +132,9 @@ Usage:
   backscroll off | on            pause / resume recording (this session)
   backscroll doctor              check that everything is set up correctly
   backscroll doctor --reindex    rebuild the full-text search index
+  backscroll upgrade             update this binary to the latest release
+                                 (checksum-verified; --check only reports;
+                                 refuses brew/scoop/deb-managed installs)
   backscroll version             print version
 
 Ignore patterns: one Go regexp per line in ~/.config/backscroll/ignore —
@@ -139,7 +142,8 @@ matching commands are never stored (see 'backscroll doctor' for the path).
 Extra redact patterns: one Go regexp per line in ~/.config/backscroll/redact.
 
 Data lives in ~/.local/share/backscroll/backscroll.db (override: $BACKSCROLL_DB).
-Everything is local; nothing ever leaves your machine.
+Everything is local; nothing ever leaves your machine. The one exception is
+'backscroll upgrade', which contacts github.com when — and only when — you run it.
 `
 
 func main() {
@@ -190,6 +194,8 @@ func main() {
 		err = cmdToggle(cmd)
 	case "doctor":
 		err = cmdDoctor(args)
+	case "upgrade":
+		err = cmdUpgrade(args)
 	case "version", "--version", "-v":
 		fmt.Println("backscroll", resolvedVersion())
 	case "help", "--help", "-h":
