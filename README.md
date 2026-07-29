@@ -651,6 +651,9 @@ responsibility. backscroll is local-only by design. Still:
   read your synced history (don't put it in the sync folder itself).
 - Don't run it on shared accounts.
 
+Found a way to defeat any of these controls? That's a vulnerability — see
+[SECURITY.md](SECURITY.md) for private reporting and the full threat model.
+
 ## Status
 
 Early but working: bash, zsh, fish, and nushell on Linux and macOS, plus
