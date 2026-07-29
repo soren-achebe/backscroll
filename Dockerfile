@@ -9,12 +9,19 @@
 #
 # Without a mount it starts with an empty database (all tools respond, zero rows).
 
-FROM golang:1.25-alpine AS build
+# --platform=$BUILDPLATFORM + GOARCH=$TARGETARCH: multi-arch images are
+# cross-compiled natively under buildx instead of emulated (arm64 build in
+# CI would otherwise run the Go compiler under qemu). Plain `docker build`
+# still works: without buildx these args are empty and Go builds natively.
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS build
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/backscroll .
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -ldflags "-s -w" -o /out/backscroll .
 
 FROM alpine:3.20
 RUN adduser -D -h /data backscroll

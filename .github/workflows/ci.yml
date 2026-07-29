@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.25.12"
       - run: go vet ./...
       - name: gofmt
         if: runner.os == 'Linux'
@@ -199,7 +199,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.25.12"
       - run: go vet ./...
       - name: unit tests + ConPTY E2E (real pwsh under backscroll run)
         run: go test ./... -count=1 -timeout 15m
@@ -213,7 +213,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.25.12"
       - run: go build .
       - name: cache pinned third-party tools
         uses: actions/cache@v4
