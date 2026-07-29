@@ -11,8 +11,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.25.12"
       - run: go vet ./...
@@ -36,7 +36,7 @@ jobs:
         run: BKS_BIN="$PWD/backscroll" python3 shell/test_mcp.py
       - name: cache pwsh 7.5.4
         if: runner.os == 'Linux'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pwsh-7.5.4
           key: pwsh-7.5.4-${{ runner.os }}
@@ -53,7 +53,7 @@ jobs:
           BKS_TEST_BIN="$PWD/backscroll" BKS_TEST_PWSH="$HOME/.cache/pwsh-7.5.4/pwsh"             python3 shell/test_pwsh.py
       - name: cache fish 4.8.1
         if: runner.os == 'Linux'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/fish-4.8.1
           key: fish-4.8.1-${{ runner.os }}
@@ -69,7 +69,7 @@ jobs:
             python3 shell/test_fish4_native.py
       - name: cache nushell 0.114.1
         if: runner.os == 'Linux'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/nu-0.114.1
           key: nu-0.114.1-${{ runner.os }}
@@ -153,7 +153,7 @@ jobs:
             python3 shell/test_iterm2.py
       - name: cache zellij 0.44.3
         if: runner.os == 'Linux'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/zellij-0.44.3
           key: zellij-0.44.3-${{ runner.os }}
@@ -176,7 +176,7 @@ jobs:
           BKS_BIN="$PWD/backscroll" python3 shell/test_screen.py
       - name: cache bash 3.2.57
         if: runner.os == 'Linux'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/bash-3.2.57
           key: bash-3.2.57-${{ runner.os }}
@@ -196,8 +196,8 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.25.12"
       - run: go vet ./...
@@ -210,13 +210,13 @@ jobs:
     # binaries, pinned versions. See shell/test_compat_matrix.py.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.25.12"
       - run: go build .
       - name: cache pinned third-party tools
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/bks-compat-tools
           key: compat-atuin18.17.1-starship1.26.0-zoxide0.10.0-direnv2.37.1-omz-b37dd49-p10k-9253fb1
@@ -268,7 +268,7 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: build image
         run: docker build -t backscroll:ci .
       - name: smoke test — MCP server responds to initialize + tools/list
