@@ -13,7 +13,7 @@
 # cross-compiled natively under buildx instead of emulated (arm64 build in
 # CI would otherwise run the Go compiler under qemu). Plain `docker build`
 # still works: without buildx these args are empty and Go builds natively.
-FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /src
