@@ -113,3 +113,107 @@ if (-not $env:BACKSCROLL_NO_BIND -and (Get-Module PSReadLine)) {
         }
     }
 }
+
+# Tab completion for backscroll subcommands and flags.
+# Active whenever backscroll is on PATH; no env var needed.
+Register-ArgumentCompleter -Native -CommandName backscroll -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+
+    $cmdline = $commandAst.CommandElements
+    $sub = if ($cmdline.Count -ge 2) { $cmdline[1].Value } else { '' }
+
+    $subs = 'run exec init list last show search pick diff export import sync stats note prune delete redact mcp serve off on doctor upgrade version help'
+    $initTargets = 'bash zsh fish pwsh tmux zellij screen'
+    $exportFormats = 'md cast json html'
+    $importSources = 'atuin zsh bash fish nu pwsh'
+    $syncSubs = 'init export import status'
+    $byValues = 'cmd cwd exit host session day'
+    $exitValues = 'fail 0 1 2'
+
+    if ($cmdline.Count -eq 2 -or ($cmdline.Count -eq 1 -and $wordToComplete)) {
+        $subs.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+            ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        return
+    }
+
+    switch ($sub) {
+        'init' {
+            if ($cmdline.Count -eq 3 -or ($cmdline.Count -eq 2 -and $wordToComplete)) {
+                $initTargets.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            }
+        }
+        'export' {
+            $flags = '--format --details --raw --redact -o -n --session --cwd --exit --since --until --host'
+            if ($wordToComplete -eq '--format' -or $wordToComplete -eq '-format') {
+                $exportFormats.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            } elseif ($wordToComplete.StartsWith('-')) {
+                $flags.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            } elseif ($wordToComplete -eq '--exit' -or $wordToComplete -eq '-exit') {
+                $exitValues.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            }
+        }
+        'exec' {
+            if ($wordToComplete.StartsWith('-')) {
+                '--quiet --head-cap --tail-cap'.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            }
+        }
+        'import' {
+            if ($cmdline.Count -eq 3 -or ($cmdline.Count -eq 2 -and $wordToComplete)) {
+                $importSources.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            } else {
+                '--dry-run --host -n'.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            }
+        }
+        'sync' {
+            if ($cmdline.Count -eq 3 -or ($cmdline.Count -eq 2 -and $wordToComplete)) {
+                $syncSubs.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            }
+        }
+        'note' {
+            if ($wordToComplete.StartsWith('-')) {
+                '--rm'.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            }
+        }
+        'prune' {
+            '--older --max-size'.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+                ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        }
+        'doctor' {
+            '--reindex'.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+                ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        }
+        'upgrade' {
+            '--check --version'.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+                ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        }
+        'serve' {
+            '--addr --redact --open'.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+                ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        }
+        { $_ -in 'list', 'last', 'search', 'pick', 'stats' } {
+            if ($wordToComplete.StartsWith('-')) {
+                $flags = '-n --session --cwd --exit --since --until --host'
+                if ($sub -eq 'pick') { $flags += ' --pager --raw --print-id --print-cmd --redact' }
+                if ($sub -eq 'search') { $flags += ' -A -B -C --redact' }
+                if ($sub -eq 'stats') { $flags += ' --by' }
+                $flags.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            } elseif ($wordToComplete -eq '--by' -or $wordToComplete -eq '-by') {
+                $byValues.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            } elseif ($wordToComplete -eq '--exit' -or $wordToComplete -eq '-exit') {
+                $exitValues.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            }
+        }
+    }
+}
