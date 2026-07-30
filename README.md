@@ -667,6 +667,15 @@ responsibility. backscroll is local-only by design. Still:
   `~/.config/backscroll/sync.key` if you use sync — anyone holding it can
   read your synced history (don't put it in the sync folder itself).
 - Don't run it on shared accounts.
+- **Verify what you download** (v0.12.1+): every release artifact carries a
+  signed [build provenance attestation](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations)
+  proving it was built by this repo's public release workflow from the tagged
+  commit — not on someone's laptop. Check any tarball, package, or the
+  checksums file with:
+
+  ```sh
+  gh attestation verify backscroll_linux_amd64.tar.gz -R soren-achebe/backscroll
+  ```
 - **Network**: exactly one command ever touches the network —
   `backscroll upgrade`, which fetches a release from GitHub when (and only
   when) you run it. There is no background update check, no telemetry, and

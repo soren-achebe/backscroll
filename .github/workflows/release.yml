@@ -5,7 +5,8 @@ on:
 
 permissions:
   contents: write
-  id-token: write # MCP Registry OIDC auth
+  id-token: write # MCP Registry OIDC auth + provenance attestations
+  attestations: write # build provenance (gh attestation verify)
 
 jobs:
   goreleaser:
@@ -39,6 +40,17 @@ jobs:
           sh mcpb/build.sh "$ver" /tmp/mcpb-bins "backscroll-$ver.mcpb"
           echo "ver=$ver" >> "$GITHUB_OUTPUT"
           echo "sha=$(sha256sum "backscroll-$ver.mcpb" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.deb
+            dist/*.rpm
+            dist/checksums.txt
+            backscroll-${{ steps.mcpb.outputs.ver }}.mcpb
 
       - name: Upload MCPB to release
         env:

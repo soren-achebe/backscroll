@@ -48,6 +48,11 @@ the [releases page](https://github.com/soren-achebe/backscroll/releases/latest).
 Script-installed binaries update themselves with `backscroll upgrade`
 (checksum-verified, runs only when you invoke it).
 
+Every release artifact (v0.12.1+) carries a signed build-provenance
+attestation proving it was built by the public release workflow from the
+tagged commit — verify any download with
+`gh attestation verify <file> -R soren-achebe/backscroll`.
+
 Then:
 
 ```sh
