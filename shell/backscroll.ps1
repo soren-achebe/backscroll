@@ -119,8 +119,15 @@ if (-not $env:BACKSCROLL_NO_BIND -and (Get-Module PSReadLine)) {
 Register-ArgumentCompleter -Native -CommandName backscroll -ScriptBlock {
     param($wordToComplete, $commandAst, $cursorPosition)
 
-    $cmdline = $commandAst.CommandElements
-    $sub = if ($cmdline.Count -ge 2) { $cmdline[1].Value } else { '' }
+    function Complete-Words([string]$words) {
+        $words.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
+            ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+    }
+
+    $tokens = @($commandAst.CommandElements | ForEach-Object { $_.Extent.Text })
+    $idx  = if ($wordToComplete) { $tokens.Count - 1 } else { $tokens.Count }
+    $prev = if ($idx -ge 1) { $tokens[$idx - 1] } else { '' }
+    $sub  = if ($idx -ge 2) { $tokens[1] } else { '' }
 
     $subs = 'run exec init list last show search pick diff export import sync stats note prune delete redact mcp serve off on doctor upgrade version help'
     $initTargets = 'bash zsh fish pwsh tmux zellij screen'
@@ -130,74 +137,57 @@ Register-ArgumentCompleter -Native -CommandName backscroll -ScriptBlock {
     $byValues = 'cmd cwd exit host session day'
     $exitValues = 'fail 0 1 2'
 
-    if ($cmdline.Count -eq 2 -or ($cmdline.Count -eq 1 -and $wordToComplete)) {
-        $subs.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-            ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+    if ($idx -eq 1) {
+        Complete-Words $subs
         return
+    }
+
+    switch ($prev) {
+        { $_ -in '--format', '-format' } { Complete-Words $exportFormats; return }
+        { $_ -in '--by', '-by' }         { Complete-Words $byValues; return }
+        { $_ -in '--exit', '-exit' }     { Complete-Words $exitValues; return }
     }
 
     switch ($sub) {
         'init' {
-            if ($cmdline.Count -eq 3 -or ($cmdline.Count -eq 2 -and $wordToComplete)) {
-                $initTargets.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
-            }
+            if ($idx -eq 2) { Complete-Words $initTargets }
         }
         'export' {
-            $flags = '--format --details --raw --redact -o -n --session --cwd --exit --since --until --host'
-            if ($wordToComplete -eq '--format' -or $wordToComplete -eq '-format') {
-                $exportFormats.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
-            } elseif ($wordToComplete.StartsWith('-')) {
-                $flags.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
-            } elseif ($wordToComplete -eq '--exit' -or $wordToComplete -eq '-exit') {
-                $exitValues.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            if ($wordToComplete.StartsWith('-')) {
+                Complete-Words '--format --details --raw --redact -o -n --session --cwd --exit --since --until --host'
             }
         }
         'exec' {
             if ($wordToComplete.StartsWith('-')) {
-                '--quiet --head-cap --tail-cap'.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+                Complete-Words '--quiet --head-cap --tail-cap'
             }
         }
         'import' {
-            if ($cmdline.Count -eq 3 -or ($cmdline.Count -eq 2 -and $wordToComplete)) {
-                $importSources.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
-            } else {
-                '--dry-run --host -n'.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            if ($wordToComplete.StartsWith('-')) {
+                Complete-Words '--dry-run --host -n'
+            } elseif ($idx -eq 2) {
+                Complete-Words $importSources
             }
         }
         'sync' {
-            if ($cmdline.Count -eq 3 -or ($cmdline.Count -eq 2 -and $wordToComplete)) {
-                $syncSubs.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
-            }
+            if ($idx -eq 2) { Complete-Words $syncSubs }
         }
         'note' {
             if ($wordToComplete.StartsWith('-')) {
-                '--rm'.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+                Complete-Words '--rm'
             }
         }
         'prune' {
-            '--older --max-size'.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-                ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            Complete-Words '--older --max-size'
         }
         'doctor' {
-            '--reindex'.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-                ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            Complete-Words '--reindex'
         }
         'upgrade' {
-            '--check --version'.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-                ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            Complete-Words '--check --version'
         }
         'serve' {
-            '--addr --redact --open'.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-                ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+            Complete-Words '--addr --redact --open'
         }
         { $_ -in 'list', 'last', 'search', 'pick', 'stats' } {
             if ($wordToComplete.StartsWith('-')) {
@@ -205,14 +195,7 @@ Register-ArgumentCompleter -Native -CommandName backscroll -ScriptBlock {
                 if ($sub -eq 'pick') { $flags += ' --pager --raw --print-id --print-cmd --redact' }
                 if ($sub -eq 'search') { $flags += ' -A -B -C --redact' }
                 if ($sub -eq 'stats') { $flags += ' --by' }
-                $flags.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
-            } elseif ($wordToComplete -eq '--by' -or $wordToComplete -eq '-by') {
-                $byValues.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
-            } elseif ($wordToComplete -eq '--exit' -or $wordToComplete -eq '-exit') {
-                $exitValues.Split(' ') | Where-Object { $_ -like "$wordToComplete*" } |
-                    ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+                Complete-Words $flags
             }
         }
     }
