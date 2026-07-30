@@ -5,7 +5,9 @@ Verifies shell/backscroll.ps1 against a real pwsh driven over a PTY:
 exact command text via OSC 6973 (base64 from PSConsoleHostReadLine),
 exit codes (native failure, cmdlet success after a stale $LASTEXITCODE),
 cwd via OSC 7 (percent-decoded), and that empty accepts / Ctrl-C at the
-prompt / the final `exit` store nothing.
+prompt / the final `exit` store nothing. Also: the Ctrl-X Ctrl-P picker
+and tab completion (Register-ArgumentCompleter, sourced from the live
+`init pwsh` output).
 
 PSReadLine probes the terminal (DSR 6n) and blocks until answered, so
 the driver responds like a real terminal would.
@@ -152,6 +154,7 @@ def main():
           "echo in-spaced-dir" in spaced_rows, spaced_rows[:300])
 
     picker_phase(env)
+    completion_phase(env)
 
     report()
 
@@ -260,6 +263,80 @@ def picker_phase(env):
           "(unknown command)" not in listing and "fzf" not in listing,
           listing[-400:])
 
+
+
+def completion_phase(env):
+    """Tab completion (Register-ArgumentCompleter, PR #11 / issue #4):
+    subcommand list, init/import/sync targets, flag-value completion via
+    the previous word, and the trailing-space vs mid-word AST cases that
+    were the original review bugs. Sources the live `init pwsh` output,
+    so embed drift fails here too."""
+    cases = [
+        # (input line, expected completions, exact-space-joined)
+        ("backscroll ",
+         "run exec init list last show search pick diff export import sync "
+         "stats note prune delete redact mcp serve off on doctor upgrade "
+         "version help"),
+        ("backscroll se", "search serve"),
+        # trailing space after a subcommand: positional targets, not files
+        # (review bug 2: the empty word is NOT in CommandElements)
+        ("backscroll init ", "bash zsh fish pwsh tmux zellij screen"),
+        ("backscroll init z", "zsh zellij"),
+        ("backscroll import ", "atuin zsh bash fish nu pwsh"),
+        ("backscroll sync ", "init export import status"),
+        # flag VALUE completion keys off the previous word (review bug 3)
+        ("backscroll export --format ", "md cast json html"),
+        ("backscroll export --format m", "md"),
+        ("backscroll stats --by ", "cmd cwd exit host session day"),
+        ("backscroll stats --by c", "cmd cwd"),
+        ("backscroll list --exit ", "fail 0 1 2"),
+        # flag-name completion ('-o'/'-n'/'-A' correctly filtered by '--')
+        ("backscroll export --",
+         "--format --details --raw --redact --session --cwd --exit "
+         "--since --until --host"),
+        ("backscroll search --",
+         "--session --cwd --exit --since --until --host --redact"),
+        ("backscroll import --d", "--dry-run"),
+        ("backscroll prune --", "--older --max-size"),
+    ]
+
+    init_ps1 = os.path.join(HOME, "bks-init-pwsh.ps1")
+    with open(init_ps1, "w") as f:
+        f.write(bks("init", "pwsh"))
+
+    sep = "\x1f"
+    lines = [
+        "$ErrorActionPreference = 'Stop'",
+        "$env:BACKSCROLL_NO_BIND = '1'",
+        f". '{init_ps1}'",
+        "function T([string]$line) {",
+        "    $r = TabExpansion2 -inputScript $line -cursorColumn $line.Length",
+        "    ($r.CompletionMatches | ForEach-Object CompletionText) -join ' '",
+        "}",
+    ]
+    for line, _ in cases:
+        lines.append(f"Write-Output ('{line}' + [char]0x1f + (T '{line}'))")
+    script = os.path.join(HOME, "bks-completion-test.ps1")
+    with open(script, "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+    proc = subprocess.run([PWSH, "-NoProfile", "-File", script],
+                          capture_output=True, text=True, env=env, timeout=120)
+    got = {}
+    for ln in proc.stdout.splitlines():
+        if sep in ln:
+            k, v = ln.split(sep, 1)
+            got[k] = v.strip()
+
+    if proc.returncode != 0 or not got:
+        check("completion: harness ran", False,
+              f"rc={proc.returncode} stderr={proc.stderr[:300]}")
+        return
+    check("completion: harness ran", True)
+    for line, want in cases:
+        have = got.get(line)
+        check(f"completion: '{line}'", have == want,
+              f"want [{want}] got [{have}]")
 
 def report():
     bad = [n for n, ok in checks if not ok]
