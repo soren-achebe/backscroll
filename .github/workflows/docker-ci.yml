@@ -1,0 +1,66 @@
+name: docker-ci
+
+# Builds (but never pushes) the image whenever the Dockerfile or its inputs
+# change, and checks the two things releases depend on: the binary carries a
+# real version stamp (not "dev") and the MCP stdio entrypoint answers.
+# Exists because release-time docker.yml is the only other place the
+# Dockerfile is exercised — too late to catch a broken build.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - .github/workflows/docker-ci.yml
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - .github/workflows/docker-ci.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history + tags so git describe works in-build
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: backscroll:ci
+      - name: Version stamp check (git-describe fallback path)
+        run: |
+          v="$(docker run --rm backscroll:ci version)"
+          echo "reported: $v"
+          case "$v" in
+            *dev*) echo "FAIL: binary reports dev version" >&2; exit 1 ;;
+            "backscroll "*) ;;
+            *) echo "FAIL: unexpected output" >&2; exit 1 ;;
+          esac
+      - name: Version stamp check (explicit VERSION build-arg path)
+        run: |
+          docker buildx build --load --build-arg VERSION=9.9.9-ci -t backscroll:ci-arg .
+          v="$(docker run --rm backscroll:ci-arg version)"
+          echo "reported: $v"
+          test "$v" = "backscroll 9.9.9-ci"
+      - name: MCP stdio smoke
+        run: |
+          printf '%s\n%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            | docker run -i --rm backscroll:ci > /tmp/out.jsonl
+          python3 - <<'EOF'
+          import json
+          lines = [json.loads(l) for l in open("/tmp/out.jsonl") if l.strip()]
+          tools = {t["name"] for r in lines if isinstance(r.get("result"), dict)
+                   for t in r["result"].get("tools", [])}
+          assert {"search_output", "list_commands", "get_output", "diff_output"} <= tools, tools
+          print("MCP smoke OK:", sorted(tools))
+          EOF
