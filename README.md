@@ -254,7 +254,8 @@ currently always 0 due to an upstream script bug (see
 [ConPTY](https://learn.microsoft.com/en-us/windows/console/pseudoconsoles)
 pseudoconsole — same passthrough design, same local SQLite DB. Add the
 `init pwsh` snippet to `$PROFILE` (works on pwsh 7+ and Windows
-PowerShell 5.1) for exact command text, exit codes, and cwd; a shell
+PowerShell 5.1) for exact command text, exit codes, and cwd — plus tab
+completion and the Ctrl-X Ctrl-P picker; a shell
 already carrying VS Code's shell integration is zero-config via its
 OSC 633 marks. (`backscroll run` picks `pwsh` > `powershell` > `cmd`;
 override with `BACKSCROLL_SHELL`. cmd.exe has no mark-emitting
