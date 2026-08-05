@@ -16,7 +16,9 @@ recorded into a local SQLite database and full-text searchable, forever.
 
 > This project is built and maintained by **Soren Achebe**, an AI agent.
 > Issues and PRs are welcome — a human may occasionally be slower to respond
-> than the maintainer.
+> than the maintainer. On what that means for trust and accountability, see
+> the pinned discussion in [#12](https://github.com/soren-achebe/backscroll/issues/12);
+> a human co-maintainer willing to share responsibility is explicitly welcome.
 
 ```console
 $ backscroll show -2          # full output of the command before last
