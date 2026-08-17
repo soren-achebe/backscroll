@@ -7,7 +7,7 @@ toolchain go1.25.12
 require (
 	github.com/creack/pty v1.1.24
 	github.com/klauspost/compress v1.19.2
-	golang.org/x/crypto v0.54.0
+	golang.org/x/crypto v0.55.0
 	golang.org/x/sys v0.47.0
 	golang.org/x/term v0.45.0
 	modernc.org/sqlite v1.56.0
